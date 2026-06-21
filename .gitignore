@@ -1,0 +1,31 @@
+# Node / React (Frontend)
+node_modules/
+dist/
+build/
+.env
+.env.local
+
+# Java / Maven / Spring Boot (Backend)
+target/
+*.jar
+*.war
+*.ear
+
+# IDE / Editor Files
+.idea/
+.vscode/
+*.iml
+*.project
+*.classpath
+*.settings/
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Other
+.gemini/
