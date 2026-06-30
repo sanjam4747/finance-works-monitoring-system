@@ -21,11 +21,14 @@ public class ProposalController {
 
     @GetMapping
     public ResponseEntity<List<ProposalDTO>> getAllProposals(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Long departmentId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long stageId) {
-        return ResponseEntity.ok(proposalService.getAllProposals(search, departmentId, status, stageId));
+        return ResponseEntity.ok(
+                proposalService.getAllProposals(search, departmentId, status, stageId, userRole)
+        );
     }
 
     @GetMapping("/{id}")
@@ -34,16 +37,38 @@ public class ProposalController {
     }
 
     @PostMapping
-    public ResponseEntity<ProposalDTO> createProposal(@Valid @RequestBody CreateProposalRequest request) {
+    public ResponseEntity<?> createProposal(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @Valid @RequestBody CreateProposalRequest request) {
+
+        // Only ADMIN and EXECUTIVE_USER can create proposals
+        if (userRole != null && "ACCOUNTS_USER".equals(userRole)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Accounts users cannot create proposals"));
+        }
+
         ProposalDTO created = proposalService.createProposal(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @PostMapping("/{id}/move")
-    public ResponseEntity<ProposalDTO> moveProposal(
+    public ResponseEntity<?> moveProposal(
             @PathVariable Long id,
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @Valid @RequestBody MoveProposalRequest request) {
-        return ResponseEntity.ok(proposalService.moveProposal(id, request));
+
+        // ACCOUNTS_USER cannot use the move endpoint
+        if ("ACCOUNTS_USER".equals(userRole)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Accounts users should use status update actions"));
+        }
+
+        try {
+            return ResponseEntity.ok(proposalService.moveProposal(id, request, userRole));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", ex.getMessage()));
+        }
     }
 
     @GetMapping("/{id}/movements")
@@ -52,10 +77,23 @@ public class ProposalController {
     }
 
     @PatchMapping("/{id}/status")
-    public ResponseEntity<ProposalDTO> updateStatus(
+    public ResponseEntity<?> updateStatus(
             @PathVariable Long id,
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @RequestBody Map<String, String> body) {
-        String status = body.get("status");
-        return ResponseEntity.ok(proposalService.updateStatus(id, status));
+
+        // Only ADMIN and ACCOUNTS_USER can update status
+        if ("EXECUTIVE_USER".equals(userRole)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Executive users cannot update proposal status"));
+        }
+
+        try {
+            String status = body.get("status");
+            return ResponseEntity.ok(proposalService.updateStatus(id, status, userRole));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", ex.getMessage()));
+        }
     }
 }

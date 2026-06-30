@@ -18,4 +18,8 @@ public class DashboardStatsDTO {
     private long rejectedProposals;
     private long underReviewProposals;
     private double averageProcessingDays;
+
+    // Department-wise average days (Change 2)
+    private double avgExecutiveDepartmentDays;
+    private double avgAccountsDepartmentDays;
 }

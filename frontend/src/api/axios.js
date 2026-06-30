@@ -7,11 +7,21 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and user role
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
+  const user = localStorage.getItem('user');
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  if (user) {
+    try {
+      const parsed = JSON.parse(user);
+      if (parsed.role) {
+        config.headers['X-User-Role'] = parsed.role;
+      }
+    } catch (_) {}
   }
   return config;
 });

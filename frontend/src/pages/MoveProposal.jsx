@@ -3,10 +3,15 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { proposalAPI, stageAPI } from '../api/services';
 import LoadingSpinner from '../components/LoadingSpinner';
 import StatusBadge from '../components/StatusBadge';
+import { useAuth } from '../context/AuthContext';
 
 export default function MoveProposal() {
   const navigate = useNavigate();
   const { id: paramId } = useParams();
+  const { user } = useAuth();
+
+  const isAdmin = user?.role === 'ADMIN';
+  const isExec  = user?.role === 'EXECUTIVE_USER';
 
   const [proposals, setProposals] = useState([]);
   const [stages, setStages] = useState([]);
@@ -77,9 +82,14 @@ export default function MoveProposal() {
     }
   };
 
-  const availableStages = stages.filter(
-    s => selectedProposal?.currentStage?.id !== s.id
-  );
+  // For Executive User: only show "Accounts Department" as target
+  // For Admin: exclude current stage
+  const availableStages = stages.filter(s => {
+    if (!selectedProposal) return true;
+    if (selectedProposal.currentStage?.id === s.id) return false; // can't move to current
+    if (isExec) return s.stageName === 'Accounts Department'; // exec can only move to Accounts
+    return true; // admin sees all others
+  });
 
   return (
     <div className="max-w-3xl fade-in">
@@ -95,6 +105,13 @@ export default function MoveProposal() {
         </button>
         <h2 className="text-xl font-bold text-slate-800">Move Proposal to Next Stage</h2>
         <p className="text-slate-500 text-sm mt-0.5">Record the stage transition and calculate time spent</p>
+
+        {/* Role hint for Executive User */}
+        {isExec && (
+          <div className="mt-3 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 font-medium">
+            As Executive User, you can only forward proposals to the Accounts Department.
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -135,7 +152,7 @@ export default function MoveProposal() {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Move To Stage <span className="text-red-500">*</span>
+                Move To <span className="text-red-500">*</span>
               </label>
               <select
                 name="toStageId"
@@ -150,6 +167,11 @@ export default function MoveProposal() {
                   <option key={s.id} value={s.id}>{s.stageName}</option>
                 ))}
               </select>
+              {isExec && availableStages.length === 0 && selectedProposal && (
+                <p className="text-xs text-amber-600 mt-1">
+                  This proposal is already in Accounts Department or there are no available stages.
+                </p>
+              )}
             </div>
 
             <div>
@@ -181,7 +203,7 @@ export default function MoveProposal() {
             <div className="flex gap-3 pt-2">
               <button
                 type="submit"
-                disabled={loading || !selectedProposal}
+                disabled={loading || !selectedProposal || availableStages.length === 0}
                 className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold rounded-xl transition-colors text-sm"
               >
                 {loading ? (
@@ -204,36 +226,60 @@ export default function MoveProposal() {
 
         {/* Current Journey */}
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <h3 className="text-sm font-bold text-slate-700 mb-4">Current Journey</h3>
-          {!selectedProposal ? (
-            <p className="text-slate-400 text-sm">Select a proposal to see its journey</p>
-          ) : movements.length === 0 ? (
-            <p className="text-slate-400 text-sm">No movements recorded yet</p>
-          ) : (
-            <div className="space-y-3">
-              {movements.map((m) => (
-                <div
-                  key={m.id}
-                  className={`p-3 rounded-lg border text-sm ${
-                    m.current
-                      ? 'bg-blue-50 border-blue-200'
-                      : 'bg-slate-50 border-slate-100'
-                  }`}
-                >
-                  <p className={`font-semibold ${m.current ? 'text-blue-700' : 'text-slate-700'}`}>
-                    {m.toStage.stageName}
-                    {m.current && <span className="ml-2 text-xs font-normal">(current)</span>}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {m.current
-                      ? `Since ${new Date(m.enteredAt).toLocaleDateString('en-IN')} · Running`
-                      : `${m.daysSpent} days`
-                    }
-                  </p>
+          <h3 className="text-sm font-bold text-slate-700 mb-4">Workflow Journey</h3>
+
+          {/* Workflow diagram */}
+          <div className="mb-4 space-y-2">
+            {['Executive Department', 'Accounts Department', 'Completed'].map((stage, i) => {
+              const isCurrent = selectedProposal?.currentStage?.stageName === stage;
+              const isPast = movements.some(m => m.toStage?.stageName === stage && m.exitedAt);
+              return (
+                <div key={stage} className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                    isCurrent ? 'bg-blue-500' : isPast ? 'bg-emerald-500' : 'bg-slate-200'
+                  }`} />
+                  <span className={`text-xs font-medium ${
+                    isCurrent ? 'text-blue-700' : isPast ? 'text-emerald-700' : 'text-slate-400'
+                  }`}>
+                    {stage} {isCurrent && '← current'}
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
+
+          <div className="border-t border-slate-100 pt-3">
+            <p className="text-xs font-semibold text-slate-500 mb-2">Movement History</p>
+            {!selectedProposal ? (
+              <p className="text-slate-400 text-xs">Select a proposal to see its journey</p>
+            ) : movements.length === 0 ? (
+              <p className="text-slate-400 text-xs">No movements recorded yet</p>
+            ) : (
+              <div className="space-y-2">
+                {movements.map((m) => (
+                  <div
+                    key={m.id}
+                    className={`p-3 rounded-lg border text-xs ${
+                      m.current
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'bg-slate-50 border-slate-100'
+                    }`}
+                  >
+                    <p className={`font-semibold ${m.current ? 'text-blue-700' : 'text-slate-700'}`}>
+                      {m.toStage.stageName}
+                      {m.current && <span className="ml-1 font-normal">(current)</span>}
+                    </p>
+                    <p className="text-slate-500 mt-0.5">
+                      {m.current
+                        ? `Since ${new Date(m.enteredAt).toLocaleDateString('en-IN')} · Running`
+                        : `${m.daysSpent} days`
+                      }
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

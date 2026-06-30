@@ -3,8 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { proposalAPI, departmentAPI, stageAPI } from '../api/services';
 import StatusBadge from '../components/StatusBadge';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { useAuth } from '../context/AuthContext';
 
 const STATUSES = ['', 'PENDING', 'UNDER_REVIEW', 'RETURNED', 'APPROVED', 'REJECTED', 'COMPLETED'];
+
+function formatCurrency(val) {
+  if (val == null) return '—';
+  return '₹' + parseFloat(val).toLocaleString('en-IN', { minimumFractionDigits: 0 });
+}
 
 export default function ProposalList() {
   const [proposals, setProposals] = useState([]);
@@ -13,6 +19,11 @@ export default function ProposalList() {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ search: '', departmentId: '', status: '', stageId: '' });
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const isAdmin    = user?.role === 'ADMIN';
+  const isExec     = user?.role === 'EXECUTIVE_USER';
+  const isAccounts = user?.role === 'ACCOUNTS_USER';
 
   useEffect(() => {
     Promise.all([
@@ -27,10 +38,10 @@ export default function ProposalList() {
   useEffect(() => {
     setLoading(true);
     const params = {};
-    if (filters.search) params.search = filters.search;
+    if (filters.search)      params.search       = filters.search;
     if (filters.departmentId) params.departmentId = filters.departmentId;
-    if (filters.status) params.status = filters.status;
-    if (filters.stageId) params.stageId = filters.stageId;
+    if (filters.status)       params.status       = filters.status;
+    if (filters.stageId)      params.stageId      = filters.stageId;
 
     proposalAPI.getAll(params)
       .then(res => setProposals(res.data))
@@ -41,24 +52,49 @@ export default function ProposalList() {
     setFilters(prev => ({ ...prev, [key]: val }));
   };
 
+  // Role-based header label
+  const listTitle = isExec
+    ? 'Executive Department Proposals'
+    : isAccounts
+      ? 'Accounts Department Proposals'
+      : 'All Proposals';
+
   return (
     <div className="space-y-5 fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">All Proposals</h2>
+          <h2 className="text-xl font-bold text-slate-800">{listTitle}</h2>
           <p className="text-sm text-slate-500 mt-0.5">{proposals.length} proposals found</p>
         </div>
-        <Link
-          to="/proposals/create"
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors"
+        {(isAdmin || isExec) && (
+          <Link
+            to="/proposals/create"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Proposal
+          </Link>
+        )}
+      </div>
+
+      {/* Role badge info */}
+      {(isExec || isAccounts) && (
+        <div className="px-4 py-2 rounded-lg text-xs font-medium border flex items-center gap-2"
+          style={{
+            backgroundColor: isExec ? '#eff6ff' : '#ecfeff',
+            borderColor: isExec ? '#bfdbfe' : '#a5f3fc',
+            color: isExec ? '#2563eb' : '#0891b2'
+          }}
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          New Proposal
-        </Link>
-      </div>
+          Showing proposals filtered for your role: {isExec ? 'Executive Department' : 'Accounts Department'}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
@@ -106,19 +142,22 @@ export default function ProposalList() {
             </select>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1.5">Current Stage</label>
-            <select
-              value={filters.stageId}
-              onChange={(e) => handleFilterChange('stageId', e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Stages</option>
-              {stages.map(s => (
-                <option key={s.id} value={s.id}>{s.stageName}</option>
-              ))}
-            </select>
-          </div>
+          {/* Stage filter only for Admin */}
+          {isAdmin && (
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">Current Stage</label>
+              <select
+                value={filters.stageId}
+                onChange={(e) => handleFilterChange('stageId', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Stages</option>
+                {stages.map(s => (
+                  <option key={s.id} value={s.id}>{s.stageName}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -141,10 +180,11 @@ export default function ProposalList() {
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Proposal No.</th>
                   <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Title</th>
-                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Department</th>
-                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Current Stage</th>
+                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Product</th>
+                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Offered Price</th>
+                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Stage</th>
                   <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Status</th>
-                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Total Days</th>
+                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Days</th>
                   <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Action</th>
                 </tr>
               </thead>
@@ -160,8 +200,28 @@ export default function ProposalList() {
                     </td>
                     <td className="px-5 py-4 max-w-xs">
                       <p className="truncate font-medium text-slate-700">{p.proposalTitle}</p>
+                      <p className="text-xs text-slate-400 truncate">{p.department?.name}</p>
                     </td>
-                    <td className="px-5 py-4 text-slate-600">{p.department?.name}</td>
+                    <td className="px-5 py-4 text-slate-600">
+                      {p.productName ? (
+                        <div>
+                          <p className="font-medium text-slate-700">{p.productName}</p>
+                          {p.productQuantity && <p className="text-xs text-slate-400">Qty: {p.productQuantity.toLocaleString('en-IN')}</p>}
+                        </div>
+                      ) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-5 py-4">
+                      {p.offeredPrice ? (
+                        <div>
+                          <p className="font-semibold text-blue-700">{formatCurrency(p.offeredPrice)}</p>
+                          {p.priceDifference != null && (
+                            <p className={`text-xs ${parseFloat(p.priceDifference) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                              Diff: {parseFloat(p.priceDifference) >= 0 ? '+' : ''}{formatCurrency(p.priceDifference)}
+                            </p>
+                          )}
+                        </div>
+                      ) : <span className="text-slate-300">—</span>}
+                    </td>
                     <td className="px-5 py-4">
                       {p.currentStage ? (
                         <span className="text-slate-700">{p.currentStage.stageName}</span>
@@ -174,7 +234,7 @@ export default function ProposalList() {
                     </td>
                     <td className="px-5 py-4">
                       <span className={`font-semibold ${p.totalDaysSpent > 30 ? 'text-red-600' : p.totalDaysSpent > 15 ? 'text-amber-600' : 'text-slate-700'}`}>
-                        {p.totalDaysSpent} {p.totalDaysSpent === 1 ? 'day' : 'days'}
+                        {p.totalDaysSpent}d
                       </span>
                     </td>
                     <td className="px-5 py-4" onClick={(e) => e.stopPropagation()}>

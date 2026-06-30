@@ -8,8 +8,9 @@ import ProposalDetails from './pages/ProposalDetails';
 import CreateProposal from './pages/CreateProposal';
 import MoveProposal from './pages/MoveProposal';
 import Reports from './pages/Reports';
+import UserManagement from './pages/UserManagement';
 
-function ProtectedRoute({ children }) {
+function ProtectedRoute({ children, allowedRoles }) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -21,6 +22,11 @@ function ProtectedRoute({ children }) {
   }
 
   if (!user) return <Navigate to="/login" replace />;
+
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return <Layout>{children}</Layout>;
 }
 
@@ -31,13 +37,45 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+      {/* All authenticated users */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/proposals" element={<ProtectedRoute><ProposalList /></ProtectedRoute>} />
-      <Route path="/proposals/create" element={<ProtectedRoute><CreateProposal /></ProtectedRoute>} />
-      <Route path="/proposals/move" element={<ProtectedRoute><MoveProposal /></ProtectedRoute>} />
       <Route path="/proposals/:id" element={<ProtectedRoute><ProposalDetails /></ProtectedRoute>} />
-      <Route path="/proposals/:id/move" element={<ProtectedRoute><MoveProposal /></ProtectedRoute>} />
-      <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+
+      {/* Create Proposal: Admin + Executive */}
+      <Route path="/proposals/create" element={
+        <ProtectedRoute allowedRoles={['ADMIN', 'EXECUTIVE_USER']}>
+          <CreateProposal />
+        </ProtectedRoute>
+      } />
+
+      {/* Move Proposal: Admin + Executive */}
+      <Route path="/proposals/move" element={
+        <ProtectedRoute allowedRoles={['ADMIN', 'EXECUTIVE_USER']}>
+          <MoveProposal />
+        </ProtectedRoute>
+      } />
+      <Route path="/proposals/:id/move" element={
+        <ProtectedRoute allowedRoles={['ADMIN', 'EXECUTIVE_USER']}>
+          <MoveProposal />
+        </ProtectedRoute>
+      } />
+
+      {/* Reports: Admin + Accounts */}
+      <Route path="/reports" element={
+        <ProtectedRoute allowedRoles={['ADMIN', 'ACCOUNTS_USER']}>
+          <Reports />
+        </ProtectedRoute>
+      } />
+
+      {/* User Management: Admin only */}
+      <Route path="/admin/users" element={
+        <ProtectedRoute allowedRoles={['ADMIN']}>
+          <UserManagement />
+        </ProtectedRoute>
+      } />
+
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );

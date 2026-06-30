@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
@@ -44,4 +45,16 @@ public class Proposal {
 
     @Column(name = "remarks", length = 1000)
     private String remarks;
+
+    @Column(name = "product_name", length = 255)
+    private String productName;
+
+    @Column(name = "product_quantity")
+    private Integer productQuantity;
+
+    @Column(name = "offered_price", precision = 15, scale = 2)
+    private BigDecimal offeredPrice;
+
+    @Column(name = "market_price", precision = 15, scale = 2)
+    private BigDecimal marketPrice;
 }

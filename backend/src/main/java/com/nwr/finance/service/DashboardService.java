@@ -29,7 +29,7 @@ public class DashboardService {
         long rejected = proposalRepository.countByStatus(ProposalStatus.REJECTED);
         long underReview = proposalRepository.countByStatus(ProposalStatus.UNDER_REVIEW);
 
-        // Calculate average processing days across all proposals that have completed movements
+        // Overall average processing days
         double avgDays = proposalRepository.findAll().stream()
                 .mapToLong(p -> {
                     Long days = movementRepository.findTotalDaysSpentForProposal(p);
@@ -37,6 +37,22 @@ public class DashboardService {
                 })
                 .average()
                 .orElse(0.0);
+
+        // Average days at Executive Department (Change 2)
+        double avgExecutiveDays = 0.0;
+        var execStageOpt = stageRepository.findByStageName("Executive Department");
+        if (execStageOpt.isPresent()) {
+            Double avg = movementRepository.findAverageDaysSpentAtStage(execStageOpt.get().getId());
+            avgExecutiveDays = avg != null ? Math.round(avg * 10.0) / 10.0 : 0.0;
+        }
+
+        // Average days at Accounts Department (Change 2)
+        double avgAccountsDays = 0.0;
+        var acctStageOpt = stageRepository.findByStageName("Accounts Department");
+        if (acctStageOpt.isPresent()) {
+            Double avg = movementRepository.findAverageDaysSpentAtStage(acctStageOpt.get().getId());
+            avgAccountsDays = avg != null ? Math.round(avg * 10.0) / 10.0 : 0.0;
+        }
 
         return DashboardStatsDTO.builder()
                 .totalProposals(total)
@@ -47,6 +63,8 @@ public class DashboardService {
                 .rejectedProposals(rejected)
                 .underReviewProposals(underReview)
                 .averageProcessingDays(Math.round(avgDays * 10.0) / 10.0)
+                .avgExecutiveDepartmentDays(avgExecutiveDays)
+                .avgAccountsDepartmentDays(avgAccountsDays)
                 .build();
     }
 
@@ -79,7 +97,7 @@ public class DashboardService {
                 .map(dept -> {
                     List<Proposal> proposals = proposalRepository.findByDepartment(dept);
                     long total = proposals.size();
-                    long completed = proposals.stream()
+                    long completedCount = proposals.stream()
                             .filter(p -> p.getStatus() == ProposalStatus.COMPLETED ||
                                          p.getStatus() == ProposalStatus.APPROVED)
                             .count();
@@ -96,7 +114,7 @@ public class DashboardService {
                             dept.getId(),
                             dept.getName(),
                             total,
-                            completed,
+                            completedCount,
                             Math.round(avgDays * 10.0) / 10.0
                     );
                 })

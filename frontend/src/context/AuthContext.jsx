@@ -18,10 +18,10 @@ export function AuthProvider({ children }) {
 
   const login = async (username, password) => {
     const response = await authAPI.login({ username, password });
-    const { token, username: uname, role } = response.data;
+    const { token, username: uname, role, fullName } = response.data;
     if (!token) throw new Error('Invalid credentials');
 
-    const userData = { username: uname, role };
+    const userData = { username: uname, role, fullName };
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);

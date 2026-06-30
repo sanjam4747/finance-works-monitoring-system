@@ -30,3 +30,7 @@ export const reportAPI = {
   getStageDelay: () => api.get('/reports/stage-delay'),
   getDepartmentPerformance: () => api.get('/reports/department-performance'),
 };
+
+export const userAPI = {
+  getAll: () => api.get('/users'),
+};

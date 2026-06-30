@@ -1,19 +1,18 @@
 package com.nwr.finance.dto;
 
-import com.nwr.finance.entity.ProposalStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+
+import java.math.BigDecimal;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateProposalRequest {
-
-    @NotBlank(message = "Proposal number is required")
-    private String proposalNumber;
 
     @NotBlank(message = "Proposal title is required")
     private String proposalTitle;
@@ -21,8 +20,17 @@ public class CreateProposalRequest {
     @NotNull(message = "Department is required")
     private Long departmentId;
 
-    @NotNull(message = "Initial stage is required")
-    private Long initialStageId;
-
     private String remarks;
+
+    // Product fields (Change 1) — all optional
+    private String productName;
+
+    @Positive(message = "Product quantity must be positive")
+    private Integer productQuantity;
+
+    @Positive(message = "Offered price must be positive")
+    private BigDecimal offeredPrice;
+
+    @Positive(message = "Market price must be positive")
+    private BigDecimal marketPrice;
 }

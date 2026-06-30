@@ -1,5 +1,6 @@
 package com.nwr.finance.dto;
 
+import com.nwr.finance.entity.UserRole;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -7,10 +8,10 @@ import lombok.AllArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class LoginResponse {
-    private String token;
+public class UserDTO {
+    private Long id;
     private String username;
-    private String role;
+    private UserRole role;
     private String fullName;
-    private String message;
+    private String email;
 }
