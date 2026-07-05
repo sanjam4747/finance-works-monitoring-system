@@ -18,9 +18,8 @@ api.interceptors.request.use((config) => {
   if (user) {
     try {
       const parsed = JSON.parse(user);
-      if (parsed.role) {
-        config.headers['X-User-Role'] = parsed.role;
-      }
+      if (parsed.role)     config.headers['X-User-Role'] = parsed.role;
+      if (parsed.username) config.headers['X-Username']  = parsed.username;
     } catch (_) {}
   }
   return config;

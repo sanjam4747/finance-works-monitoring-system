@@ -5,8 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -23,10 +23,16 @@ public class ProposalDTO {
     private String remarks;
     private Long totalDaysSpent;
 
-    // Product fields (Change 1)
-    private String productName;
-    private Integer productQuantity;
-    private BigDecimal offeredPrice;
-    private BigDecimal marketPrice;
-    private BigDecimal priceDifference; // computed: marketPrice - offeredPrice
+    // Phase 1: Who created the proposal
+    private String createdByUsername;
+    private String createdByFullName;
+
+    // Phase 1: Multi-item product list (replaces flat product_* fields)
+    private List<ProposalItemDTO> items;
+
+    // Convenience computed totals across all items
+    private Long totalItemCount;
+    private java.math.BigDecimal totalOfferedPrice;
+    private java.math.BigDecimal totalMarketPrice;
+    private java.math.BigDecimal totalPriceDifference;
 }

@@ -2,12 +2,11 @@ package com.nwr.finance.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
-import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -22,15 +21,6 @@ public class CreateProposalRequest {
 
     private String remarks;
 
-    // Product fields (Change 1) — all optional
-    private String productName;
-
-    @Positive(message = "Product quantity must be positive")
-    private Integer productQuantity;
-
-    @Positive(message = "Offered price must be positive")
-    private BigDecimal offeredPrice;
-
-    @Positive(message = "Market price must be positive")
-    private BigDecimal marketPrice;
+    // Phase 1: Zero or more items (optional — proposal can have no items)
+    private List<ProposalItemRequest> items;
 }

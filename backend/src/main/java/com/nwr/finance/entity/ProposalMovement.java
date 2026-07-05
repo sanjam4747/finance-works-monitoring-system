@@ -41,4 +41,9 @@ public class ProposalMovement {
 
     @Column(name = "remarks", length = 1000)
     private String remarks;
+
+    // Phase 1: Track who performed this movement action
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "moved_by")
+    private User movedBy;
 }

@@ -5,8 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Entity
 @Table(name = "proposals")
@@ -46,15 +46,19 @@ public class Proposal {
     @Column(name = "remarks", length = 1000)
     private String remarks;
 
-    @Column(name = "product_name", length = 255)
-    private String productName;
+    // Phase 1: Track who created this proposal
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "created_by")
+    private User createdBy;
 
-    @Column(name = "product_quantity")
-    private Integer productQuantity;
+    // Phase 1: Multiple items per proposal — loaded lazily to avoid N+1
+    @OneToMany(mappedBy = "proposal", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("sortOrder ASC")
+    private List<ProposalItem> items;
 
-    @Column(name = "offered_price", precision = 15, scale = 2)
-    private BigDecimal offeredPrice;
-
-    @Column(name = "market_price", precision = 15, scale = 2)
-    private BigDecimal marketPrice;
+    // ── Legacy flat-column fields kept as @Transient so existing DB data
+    //    is harmless (Hibernate ignores unmapped columns on ddl-auto=update).
+    //    These are intentionally NOT mapped to avoid schema conflicts.
+    // The physical columns product_name, product_quantity, offered_price,
+    // market_price still exist in the DB but are no longer used by the app.
 }

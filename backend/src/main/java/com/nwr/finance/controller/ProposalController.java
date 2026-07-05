@@ -13,7 +13,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/proposals")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = { "http://localhost:5173", "http://localhost:5174" })
 @RequiredArgsConstructor
 public class ProposalController {
 
@@ -39,15 +39,15 @@ public class ProposalController {
     @PostMapping
     public ResponseEntity<?> createProposal(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-Username",  required = false) String username,
             @Valid @RequestBody CreateProposalRequest request) {
 
-        // Only ADMIN and EXECUTIVE_USER can create proposals
         if (userRole != null && "ACCOUNTS_USER".equals(userRole)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Accounts users cannot create proposals"));
         }
 
-        ProposalDTO created = proposalService.createProposal(request);
+        ProposalDTO created = proposalService.createProposal(request, username);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
@@ -55,16 +55,16 @@ public class ProposalController {
     public ResponseEntity<?> moveProposal(
             @PathVariable Long id,
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-Username",  required = false) String username,
             @Valid @RequestBody MoveProposalRequest request) {
 
-        // ACCOUNTS_USER cannot use the move endpoint
         if ("ACCOUNTS_USER".equals(userRole)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Accounts users should use status update actions"));
         }
 
         try {
-            return ResponseEntity.ok(proposalService.moveProposal(id, request, userRole));
+            return ResponseEntity.ok(proposalService.moveProposal(id, request, userRole, username));
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("message", ex.getMessage()));
@@ -80,9 +80,9 @@ public class ProposalController {
     public ResponseEntity<?> updateStatus(
             @PathVariable Long id,
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-Username",  required = false) String username,
             @RequestBody Map<String, String> body) {
 
-        // Only ADMIN and ACCOUNTS_USER can update status
         if ("EXECUTIVE_USER".equals(userRole)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Executive users cannot update proposal status"));
@@ -90,7 +90,7 @@ public class ProposalController {
 
         try {
             String status = body.get("status");
-            return ResponseEntity.ok(proposalService.updateStatus(id, status, userRole));
+            return ResponseEntity.ok(proposalService.updateStatus(id, status, userRole, username));
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("message", ex.getMessage()));

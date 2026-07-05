@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -19,19 +20,14 @@ import java.util.Random;
 @Slf4j
 public class DataInitializer implements CommandLineRunner {
 
-    private final DepartmentRepository departmentRepository;
-    private final ProposalStageRepository stageRepository;
-    private final ProposalRepository proposalRepository;
+    private final DepartmentRepository       departmentRepository;
+    private final ProposalStageRepository    stageRepository;
+    private final ProposalRepository         proposalRepository;
     private final ProposalMovementRepository movementRepository;
-    private final UserRepository userRepository;
+    private final ProposalItemRepository     itemRepository;
+    private final ProposalSequenceRepository sequenceRepository;
+    private final UserRepository             userRepository;
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // run() is intentionally NOT @Transactional so that resetDatabase() and
-    // seedData() each execute in their own separate, committed transactions
-    // (Spring proxy handles @Transactional on public methods called externally,
-    // but private-method self-calls bypass the proxy — keeping run() without
-    // @Transactional ensures each public sub-method gets its own transaction).
-    // ──────────────────────────────────────────────────────────────────────────
     @Override
     public void run(String... args) {
         boolean hasOldStages = stageRepository.existsByStageName("Section Officer") ||
@@ -42,14 +38,14 @@ public class DataInitializer implements CommandLineRunner {
         boolean alreadySeeded = stageRepository.existsByStageName("Executive Department") &&
                                 stageRepository.existsByStageName("Accounts Department") &&
                                 departmentRepository.count() > 0 &&
-                                userRepository.count() > 0;
+                                userRepository.count() > 0 &&
+                                sequenceRepository.count() > 0;   // Phase 1: check sequence exists
 
         if (alreadySeeded) {
-            log.info("Data already seeded with the 2-stage workflow. Skipping.");
+            log.info("Data already seeded (Phase 1). Skipping.");
             return;
         }
 
-        // Reset when old stages or any stale data exist
         boolean needsReset = hasOldStages ||
                              departmentRepository.count() > 0 ||
                              stageRepository.count() > 0 ||
@@ -57,59 +53,53 @@ public class DataInitializer implements CommandLineRunner {
 
         if (needsReset) {
             log.info("Stale or old-workflow data detected. Resetting database...");
-            resetDatabase();   // committed in its own transaction before seedData runs
+            resetDatabase();
         }
 
-        log.info("Seeding fresh data...");
-        seedData();            // committed in its own separate transaction
+        log.info("Seeding fresh data (Phase 1)...");
+        seedData();
     }
 
-    // Public so Spring proxy can apply @Transactional properly
     @Transactional
     public void resetDatabase() {
+        itemRepository.deleteAll();
         movementRepository.deleteAll();
         proposalRepository.deleteAll();
+        sequenceRepository.deleteAll();
         stageRepository.deleteAll();
         departmentRepository.deleteAll();
         userRepository.deleteAll();
         log.info("All tables cleared successfully.");
     }
 
-    // Public so Spring proxy can apply @Transactional properly
     @Transactional
     public void seedData() {
-        // ── Users ─────────────────────────────────────────────────────────────
-        User admin = new User(null, "admin", "admin123", UserRole.ADMIN,
-                "System Administrator", "admin@nwr.gov.in");
-        User executive = new User(null, "executive", "exec123", UserRole.EXECUTIVE_USER,
-                "Executive Officer", "executive@nwr.gov.in");
-        User accounts = new User(null, "accounts", "acct123", UserRole.ACCOUNTS_USER,
-                "Accounts Officer", "accounts@nwr.gov.in");
-        userRepository.saveAll(List.of(admin, executive, accounts));
-
         // ── Departments ────────────────────────────────────────────────────────
-        Department engineering = departmentRepository.findByName("Engineering")
-                .orElseGet(() -> { Department d = new Department(); d.setName("Engineering"); return departmentRepository.save(d); });
-        Department electrical = departmentRepository.findByName("Electrical")
-                .orElseGet(() -> { Department d = new Department(); d.setName("Electrical"); return departmentRepository.save(d); });
-        Department mechanical = departmentRepository.findByName("Mechanical")
-                .orElseGet(() -> { Department d = new Department(); d.setName("Mechanical"); return departmentRepository.save(d); });
-        Department personnel = departmentRepository.findByName("Personnel")
-                .orElseGet(() -> { Department d = new Department(); d.setName("Personnel"); return departmentRepository.save(d); });
-        Department signal = departmentRepository.findByName("Signal & Telecom")
-                .orElseGet(() -> { Department d = new Department(); d.setName("Signal & Telecom"); return departmentRepository.save(d); });
+        Department engineering = save(new Department(), "Engineering");
+        Department electrical  = save(new Department(), "Electrical");
+        Department mechanical  = save(new Department(), "Mechanical");
+        Department personnel   = save(new Department(), "Personnel");
+        Department signal      = save(new Department(), "Signal & Telecom");
 
         List<Department> departments = List.of(engineering, electrical, mechanical, personnel, signal);
 
+        // ── Users (Phase 1: each user assigned a department) ──────────────────
+        User admin     = createUser("admin",     "admin123",   UserRole.ADMIN,          "System Administrator", "admin@nwr.gov.in",     engineering);
+        User executive = createUser("executive", "exec123",    UserRole.EXECUTIVE_USER, "Executive Officer",    "executive@nwr.gov.in", electrical);
+        User accounts  = createUser("accounts",  "acct123",    UserRole.ACCOUNTS_USER,  "Accounts Officer",     "accounts@nwr.gov.in",  mechanical);
+        userRepository.saveAll(List.of(admin, executive, accounts));
+
         // ── Workflow Stages ────────────────────────────────────────────────────
-        ProposalStage executiveDept = stageRepository.findByStageName("Executive Department")
-                .orElseGet(() -> { ProposalStage s = new ProposalStage(); s.setStageName("Executive Department"); s.setSequenceNumber(1); return stageRepository.save(s); });
-        ProposalStage accountsDept = stageRepository.findByStageName("Accounts Department")
-                .orElseGet(() -> { ProposalStage s = new ProposalStage(); s.setStageName("Accounts Department"); s.setSequenceNumber(2); return stageRepository.save(s); });
+        ProposalStage executiveDept = createStage("Executive Department", 1);
+        ProposalStage accountsDept  = createStage("Accounts Department",  2);
+        List<ProposalStage> stages  = List.of(executiveDept, accountsDept);
 
-        List<ProposalStage> stages = List.of(executiveDept, accountsDept);
+        // ── Proposal Sequence — seed for current year ─────────────────────────
+        int year = LocalDate.now().getYear();
+        ProposalSequence seq = new ProposalSequence(year, 0);
+        sequenceRepository.save(seq);
 
-        // ── Seed Proposals ─────────────────────────────────────────────────────
+        // ── Seed 50 Proposals ──────────────────────────────────────────────────
         Random rnd = new Random(42);
 
         String[] titles = {
@@ -175,7 +165,6 @@ public class DataInitializer implements CommandLineRunner {
             "Track Machines", "Power Cars", "OHE Masts", "Cable Drums"
         };
 
-        int year = LocalDate.now().getYear();
         String prefix = "FW-" + year + "-";
 
         for (int i = 1; i <= 50; i++) {
@@ -203,13 +192,6 @@ public class DataInitializer implements CommandLineRunner {
                 status = ProposalStatus.UNDER_REVIEW;
             }
 
-            String productName = products[rnd.nextInt(products.length)];
-            int qty = (rnd.nextInt(10) + 1) * 5;
-            BigDecimal offeredPrice = BigDecimal.valueOf(50000L + rnd.nextInt(5000000));
-            BigDecimal marketPrice = rnd.nextBoolean()
-                    ? offeredPrice.add(BigDecimal.valueOf(rnd.nextInt(200000)))
-                    : null;
-
             Proposal proposal = new Proposal();
             proposal.setProposalNumber(proposalNumber);
             proposal.setProposalTitle(title);
@@ -219,15 +201,31 @@ public class DataInitializer implements CommandLineRunner {
             proposal.setSubmissionDate(submissionDate);
             proposal.setCompletionDate(completionDate);
             proposal.setRemarks("Proposal submitted for review and approval.");
-            proposal.setProductName(productName);
-            proposal.setProductQuantity(qty);
-            proposal.setOfferedPrice(offeredPrice);
-            proposal.setMarketPrice(marketPrice);
+            proposal.setCreatedBy(admin);  // Phase 1: seed with admin as creator
 
             Proposal saved = proposalRepository.save(proposal);
 
-            LocalDateTime baseTime = submissionDate.atStartOfDay().plusHours(9);
+            // Phase 1: Create 1–3 items per proposal
+            int itemCount = rnd.nextInt(3) + 1;
+            List<ProposalItem> items = new ArrayList<>();
+            for (int j = 0; j < itemCount; j++) {
+                ProposalItem item = new ProposalItem();
+                item.setProposal(saved);
+                item.setItemName(products[rnd.nextInt(products.length)]);
+                item.setQuantity((rnd.nextInt(10) + 1) * 5);
+                item.setUnit(j % 2 == 0 ? "pcs" : "units");
+                BigDecimal offeredPrice = BigDecimal.valueOf(50000L + rnd.nextInt(500000));
+                item.setOfferedPrice(offeredPrice);
+                if (rnd.nextBoolean()) {
+                    item.setMarketPrice(offeredPrice.add(BigDecimal.valueOf(rnd.nextInt(100000))));
+                }
+                item.setSortOrder(j);
+                items.add(item);
+            }
+            itemRepository.saveAll(items);
 
+            // Movements
+            LocalDateTime baseTime = submissionDate.atStartOfDay().plusHours(9);
             for (int s = 0; s < stageCount; s++) {
                 ProposalStage fromStage = s == 0 ? null : stages.get(s - 1);
                 ProposalStage toStage   = stages.get(s);
@@ -238,14 +236,12 @@ public class DataInitializer implements CommandLineRunner {
                 Long daysSpent          = null;
 
                 boolean isLastStage = (s == stageCount - 1);
-
                 if (!isLastStage) {
                     exitedAt  = enteredAt.plusDays(daysAtStage).plusHours(rnd.nextInt(8));
                     daysSpent = (long) daysAtStage;
                     baseTime  = exitedAt;
-                } else if (status == ProposalStatus.APPROVED ||
-                           status == ProposalStatus.COMPLETED ||
-                           status == ProposalStatus.REJECTED) {
+                } else if (status == ProposalStatus.APPROVED || status == ProposalStatus.COMPLETED
+                        || status == ProposalStatus.REJECTED) {
                     exitedAt  = enteredAt.plusDays(daysAtStage).plusHours(rnd.nextInt(8));
                     daysSpent = (long) daysAtStage;
                 }
@@ -260,11 +256,47 @@ public class DataInitializer implements CommandLineRunner {
                 movement.setRemarks(s == 0
                         ? "Initial submission to " + toStage.getStageName()
                         : "Moved from " + fromStage.getStageName() + " to " + toStage.getStageName());
+                movement.setMovedBy(executive);  // Phase 1: seed actor
 
                 movementRepository.save(movement);
             }
         }
 
-        log.info("Seed complete: 3 users, 5 departments, 2 workflow stages, 50 proposals.");
+        // Phase 1: Update sequence to 50 (matches the 50 seeded proposals)
+        seq.setLastSeq(50);
+        sequenceRepository.save(seq);
+
+        log.info("Seed complete (Phase 1): 3 users, 5 departments, 2 workflow stages, 50 proposals with items.");
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private Department save(Department d, String name) {
+        return departmentRepository.findByName(name).orElseGet(() -> {
+            d.setName(name);
+            return departmentRepository.save(d);
+        });
+    }
+
+    private User createUser(String username, String password, UserRole role,
+                             String fullName, String email, Department dept) {
+        User u = new User();
+        u.setUsername(username);
+        u.setPassword(password);
+        u.setRole(role);
+        u.setFullName(fullName);
+        u.setEmail(email);
+        u.setDepartment(dept);
+        u.setIsActive(true);
+        return u;
+    }
+
+    private ProposalStage createStage(String name, int seq) {
+        return stageRepository.findByStageName(name).orElseGet(() -> {
+            ProposalStage s = new ProposalStage();
+            s.setStageName(name);
+            s.setSequenceNumber(seq);
+            return stageRepository.save(s);
+        });
     }
 }

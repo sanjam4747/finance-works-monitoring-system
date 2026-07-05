@@ -5,6 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "users")
 @Data
@@ -31,4 +33,23 @@ public class User {
 
     @Column(name = "email", length = 100)
     private String email;
+
+    // Phase 1: Department assignment — every user belongs to one department
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "department_id")
+    private Department department;
+
+    // Phase 1: Soft delete / deactivation
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
+    // Phase 1: Audit — when was the user created
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) createdAt = LocalDateTime.now();
+        if (isActive == null)  isActive  = true;
+    }
 }

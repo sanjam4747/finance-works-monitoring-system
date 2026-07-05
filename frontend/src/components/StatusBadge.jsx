@@ -1,10 +1,10 @@
 const STATUS_CONFIG = {
-  PENDING: { label: 'Pending', className: 'badge-pending' },
+  PENDING:      { label: 'Pending',      className: 'badge-pending' },
   UNDER_REVIEW: { label: 'Under Review', className: 'badge-under-review' },
-  RETURNED: { label: 'Returned', className: 'badge-returned' },
-  APPROVED: { label: 'Approved', className: 'badge-approved' },
-  REJECTED: { label: 'Rejected', className: 'badge-rejected' },
-  COMPLETED: { label: 'Completed', className: 'badge-completed' },
+  RETURNED:     { label: 'Returned',     className: 'badge-returned' },
+  APPROVED:     { label: 'Approved',     className: 'badge-approved' },
+  REJECTED:     { label: 'Rejected',     className: 'badge-rejected' },
+  COMPLETED:    { label: 'Completed',    className: 'badge-completed' },
 };
 
 export default function StatusBadge({ status }) {

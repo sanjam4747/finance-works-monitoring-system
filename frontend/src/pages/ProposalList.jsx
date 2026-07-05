@@ -13,11 +13,11 @@ function formatCurrency(val) {
 }
 
 export default function ProposalList() {
-  const [proposals, setProposals] = useState([]);
+  const [proposals, setProposals]   = useState([]);
   const [departments, setDepartments] = useState([]);
-  const [stages, setStages] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ search: '', departmentId: '', status: '', stageId: '' });
+  const [stages, setStages]         = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [filters, setFilters]       = useState({ search: '', departmentId: '', status: '', stageId: '' });
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -38,7 +38,7 @@ export default function ProposalList() {
   useEffect(() => {
     setLoading(true);
     const params = {};
-    if (filters.search)      params.search       = filters.search;
+    if (filters.search)       params.search       = filters.search;
     if (filters.departmentId) params.departmentId = filters.departmentId;
     if (filters.status)       params.status       = filters.status;
     if (filters.stageId)      params.stageId      = filters.stageId;
@@ -52,7 +52,6 @@ export default function ProposalList() {
     setFilters(prev => ({ ...prev, [key]: val }));
   };
 
-  // Role-based header label
   const listTitle = isExec
     ? 'Executive Department Proposals'
     : isAccounts
@@ -61,18 +60,19 @@ export default function ProposalList() {
 
   return (
     <div className="space-y-5 fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+
+      {/* ── Page Header ── */}
+      <div className="flex items-start sm:items-center justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">{listTitle}</h2>
-          <p className="text-sm text-slate-500 mt-0.5">{proposals.length} proposals found</p>
+          <h2 className="text-[1rem] font-bold text-slate-800">{listTitle}</h2>
+          <p className="text-[0.75rem] text-slate-400 mt-0.5">{proposals.length} proposals found</p>
         </div>
         {(isAdmin || isExec) && (
           <Link
             to="/proposals/create"
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors"
+            className="btn btn-primary flex-shrink-0"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             New Proposal
@@ -80,47 +80,49 @@ export default function ProposalList() {
         )}
       </div>
 
-      {/* Role badge info */}
+      {/* ── Role Notice ── */}
       {(isExec || isAccounts) && (
-        <div className="px-4 py-2 rounded-lg text-xs font-medium border flex items-center gap-2"
+        <div
+          className="px-4 py-2.5 rounded-lg text-[0.75rem] font-medium border flex items-center gap-2"
           style={{
             backgroundColor: isExec ? '#eff6ff' : '#ecfeff',
             borderColor: isExec ? '#bfdbfe' : '#a5f3fc',
             color: isExec ? '#2563eb' : '#0891b2'
           }}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           Showing proposals filtered for your role: {isExec ? 'Executive Department' : 'Accounts Department'}
         </div>
       )}
 
-      {/* Filters */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-1">
-            <label className="block text-xs font-medium text-slate-600 mb-1.5">Search</label>
+      {/* ── Filters ── */}
+      <div className="card p-3 sm:p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Search */}
+          <div className="sm:col-span-2 lg:col-span-1">
+            <label className="form-label">Search</label>
             <div className="relative">
-              <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
                 type="text"
-                placeholder="Proposal no. or title..."
+                placeholder="Proposal no. or title…"
                 value={filters.search}
                 onChange={(e) => handleFilterChange('search', e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="form-input pl-9"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1.5">Department</label>
+            <label className="form-label">Department</label>
             <select
               value={filters.departmentId}
               onChange={(e) => handleFilterChange('departmentId', e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="form-select"
             >
               <option value="">All Departments</option>
               {departments.map(d => (
@@ -130,11 +132,11 @@ export default function ProposalList() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1.5">Status</label>
+            <label className="form-label">Status</label>
             <select
               value={filters.status}
               onChange={(e) => handleFilterChange('status', e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="form-select"
             >
               {STATUSES.map(s => (
                 <option key={s} value={s}>{s === '' ? 'All Statuses' : s.replace('_', ' ')}</option>
@@ -142,14 +144,13 @@ export default function ProposalList() {
             </select>
           </div>
 
-          {/* Stage filter only for Admin */}
           {isAdmin && (
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Current Stage</label>
+              <label className="form-label">Stage</label>
               <select
                 value={filters.stageId}
                 onChange={(e) => handleFilterChange('stageId', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="form-select"
               >
                 <option value="">All Stages</option>
                 {stages.map(s => (
@@ -161,88 +162,96 @@ export default function ProposalList() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      {/* ── Table ── */}
+      <div className="card overflow-hidden">
         {loading ? (
           <LoadingSpinner />
         ) : proposals.length === 0 ? (
           <div className="py-16 text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 mx-auto text-slate-200 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <p className="text-slate-500 font-medium">No proposals found</p>
-            <p className="text-slate-400 text-sm mt-1">Try adjusting your filters</p>
+            <p className="text-slate-500 font-semibold text-sm">No proposals found</p>
+            <p className="text-slate-400 text-xs mt-1">Try adjusting your filters</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="table-scroll-wrapper">
+            <table className="data-table">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Proposal No.</th>
-                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Title</th>
-                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Product</th>
-                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Offered Price</th>
-                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Stage</th>
-                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Status</th>
-                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Days</th>
-                  <th className="text-left px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wide">Action</th>
+                <tr>
+                  <th>Proposal No.</th>
+                  <th>Title / Department</th>
+                  <th>Product</th>
+                  <th>Offered Price</th>
+                  <th>Stage</th>
+                  <th>Status</th>
+                  <th className="text-center">Days</th>
+                  <th className="text-center">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody>
                 {proposals.map((p) => (
                   <tr
                     key={p.id}
-                    className="hover:bg-blue-50/50 transition-colors cursor-pointer"
+                    className="cursor-pointer"
                     onClick={() => navigate(`/proposals/${p.id}`)}
                   >
-                    <td className="px-5 py-4">
-                      <span className="font-mono font-semibold text-blue-700">{p.proposalNumber}</span>
+                    <td>
+                      <span className="font-mono font-bold text-blue-700 text-[0.8125rem]">
+                        {p.proposalNumber}
+                      </span>
                     </td>
-                    <td className="px-5 py-4 max-w-xs">
-                      <p className="truncate font-medium text-slate-700">{p.proposalTitle}</p>
-                      <p className="text-xs text-slate-400 truncate">{p.department?.name}</p>
+                    <td className="max-w-[220px]">
+                      <p className="font-semibold text-slate-800 truncate text-[0.8125rem]">{p.proposalTitle}</p>
+                      <p className="text-[0.6875rem] text-slate-400 truncate mt-0.5">{p.department?.name}</p>
                     </td>
-                    <td className="px-5 py-4 text-slate-600">
+                    <td>
                       {p.productName ? (
                         <div>
-                          <p className="font-medium text-slate-700">{p.productName}</p>
-                          {p.productQuantity && <p className="text-xs text-slate-400">Qty: {p.productQuantity.toLocaleString('en-IN')}</p>}
-                        </div>
-                      ) : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="px-5 py-4">
-                      {p.offeredPrice ? (
-                        <div>
-                          <p className="font-semibold text-blue-700">{formatCurrency(p.offeredPrice)}</p>
-                          {p.priceDifference != null && (
-                            <p className={`text-xs ${parseFloat(p.priceDifference) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                              Diff: {parseFloat(p.priceDifference) >= 0 ? '+' : ''}{formatCurrency(p.priceDifference)}
+                          <p className="font-medium text-slate-700 text-[0.8125rem]">{p.productName}</p>
+                          {p.productQuantity && (
+                            <p className="text-[0.6875rem] text-slate-400 mt-0.5">
+                              Qty: {p.productQuantity.toLocaleString('en-IN')}
                             </p>
                           )}
                         </div>
                       ) : <span className="text-slate-300">—</span>}
                     </td>
-                    <td className="px-5 py-4">
+                    <td>
+                      {p.offeredPrice ? (
+                        <div>
+                          <p className="font-bold text-blue-700 text-[0.8125rem]">{formatCurrency(p.offeredPrice)}</p>
+                          {p.priceDifference != null && (
+                            <p className={`text-[0.6875rem] mt-0.5 ${parseFloat(p.priceDifference) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                              {parseFloat(p.priceDifference) >= 0 ? '+' : ''}{formatCurrency(p.priceDifference)}
+                            </p>
+                          )}
+                        </div>
+                      ) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td>
                       {p.currentStage ? (
-                        <span className="text-slate-700">{p.currentStage.stageName}</span>
+                        <span className="text-[0.8125rem] text-slate-600">{p.currentStage.stageName}</span>
                       ) : (
-                        <span className="text-slate-400">—</span>
+                        <span className="text-slate-300">—</span>
                       )}
                     </td>
-                    <td className="px-5 py-4">
-                      <StatusBadge status={p.status} />
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className={`font-semibold ${p.totalDaysSpent > 30 ? 'text-red-600' : p.totalDaysSpent > 15 ? 'text-amber-600' : 'text-slate-700'}`}>
+                    <td><StatusBadge status={p.status} /></td>
+                    <td className="text-center">
+                      <span className={`font-bold text-[0.8125rem] tabular-nums ${
+                        p.totalDaysSpent > 30 ? 'text-red-600'
+                        : p.totalDaysSpent > 15 ? 'text-amber-600'
+                        : 'text-slate-600'
+                      }`}>
                         {p.totalDaysSpent}d
                       </span>
                     </td>
-                    <td className="px-5 py-4" onClick={(e) => e.stopPropagation()}>
+                    <td className="text-center" onClick={(e) => e.stopPropagation()}>
                       <Link
                         to={`/proposals/${p.id}`}
-                        className="text-blue-600 hover:text-blue-800 font-medium text-xs"
+                        className="btn btn-secondary btn-sm"
                       >
-                        View →
+                        View
                       </Link>
                     </td>
                   </tr>

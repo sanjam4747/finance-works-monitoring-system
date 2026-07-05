@@ -8,17 +8,14 @@ import lombok.AllArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserDTO {
-    private Long id;
-    private String username;
-    private UserRole role;
+public class UpdateUserRequest {
     private String fullName;
     private String email;
+    private UserRole role;
 
     // Phase 1: Department assignment
     private Long departmentId;
-    private String departmentName;
 
-    // Phase 1: Active status
-    private Boolean isActive;
+    // Optional: provide a new password; null means keep existing
+    private String password;
 }

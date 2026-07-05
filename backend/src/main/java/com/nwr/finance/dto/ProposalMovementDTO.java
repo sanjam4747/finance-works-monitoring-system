@@ -19,4 +19,8 @@ public class ProposalMovementDTO {
     private Long daysSpent;
     private String remarks;
     private boolean current;
+
+    // Phase 1: Actor tracking
+    private String movedByUsername;
+    private String movedByFullName;
 }
