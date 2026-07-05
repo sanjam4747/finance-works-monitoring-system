@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -22,18 +23,21 @@ public class ProposalController {
     @GetMapping
     public ResponseEntity<List<ProposalDTO>> getAllProposals(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-Username",  required = false) String username,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Long departmentId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long stageId) {
         return ResponseEntity.ok(
-                proposalService.getAllProposals(search, departmentId, status, stageId, userRole)
+                proposalService.getAllProposals(search, departmentId, status, stageId, userRole, username)
         );
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ProposalDTO> getProposalById(@PathVariable Long id) {
-        return ResponseEntity.ok(proposalService.getProposalById(id));
+    public ResponseEntity<ProposalDTO> getProposalById(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-Username", required = false) String username) {
+        return ResponseEntity.ok(proposalService.getProposalById(id, username));
     }
 
     @PostMapping
@@ -65,6 +69,9 @@ public class ProposalController {
 
         try {
             return ResponseEntity.ok(proposalService.moveProposal(id, request, userRole, username));
+        } catch (ResponseStatusException ex) {
+            return ResponseEntity.status(ex.getStatusCode())
+                    .body(Map.of("message", ex.getReason() != null ? ex.getReason() : ex.getMessage()));
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("message", ex.getMessage()));
@@ -91,6 +98,9 @@ public class ProposalController {
         try {
             String status = body.get("status");
             return ResponseEntity.ok(proposalService.updateStatus(id, status, userRole, username));
+        } catch (ResponseStatusException ex) {
+            return ResponseEntity.status(ex.getStatusCode())
+                    .body(Map.of("message", ex.getReason() != null ? ex.getReason() : ex.getMessage()));
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("message", ex.getMessage()));

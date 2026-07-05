@@ -22,31 +22,27 @@ public class DashboardController {
     private final ProposalService proposalService;
 
     @GetMapping("/dashboard/stats")
-    public ResponseEntity<DashboardStatsDTO> getDashboardStats() {
-        return ResponseEntity.ok(dashboardService.getDashboardStats());
+    public ResponseEntity<DashboardStatsDTO> getDashboardStats(
+            @RequestHeader(value = "X-Username", required = false) String username) {
+        return ResponseEntity.ok(dashboardService.getDashboardStats(username));
     }
 
     @GetMapping("/reports/stage-delay")
-    public ResponseEntity<List<StageDelayDTO>> getStageDelayReport() {
-        return ResponseEntity.ok(dashboardService.getStageDelayReport());
+    public ResponseEntity<List<StageDelayDTO>> getStageDelayReport(
+            @RequestHeader(value = "X-Username", required = false) String username) {
+        return ResponseEntity.ok(dashboardService.getStageDelayReport(username));
     }
 
     @GetMapping("/reports/department-performance")
-    public ResponseEntity<List<DepartmentPerformanceDTO>> getDepartmentPerformanceReport() {
-        return ResponseEntity.ok(dashboardService.getDepartmentPerformanceReport());
+    public ResponseEntity<List<DepartmentPerformanceDTO>> getDepartmentPerformanceReport(
+            @RequestHeader(value = "X-Username", required = false) String username) {
+        return ResponseEntity.ok(dashboardService.getDepartmentPerformanceReport(username));
     }
 
     @GetMapping("/reports/aging")
-    public ResponseEntity<AgingReportDTO> getAgingReport() {
-        List<Proposal> over7 = movementRepository.findAgingProposals(7);
-        List<Proposal> over15 = movementRepository.findAgingProposals(15);
-        List<Proposal> over30 = movementRepository.findAgingProposals(30);
-
-        AgingReportDTO report = new AgingReportDTO(
-                over7.stream().map(proposalService::toDTO).collect(java.util.stream.Collectors.toList()),
-                over15.stream().map(proposalService::toDTO).collect(java.util.stream.Collectors.toList()),
-                over30.stream().map(proposalService::toDTO).collect(java.util.stream.Collectors.toList())
-        );
+    public ResponseEntity<AgingReportDTO> getAgingReport(
+            @RequestHeader(value = "X-Username", required = false) String username) {
+        AgingReportDTO report = dashboardService.getAgingReport(username, proposalService);
         return ResponseEntity.ok(report);
     }
 }

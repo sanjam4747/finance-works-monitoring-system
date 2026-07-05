@@ -40,6 +40,10 @@ public interface ProposalRepository extends JpaRepository<Proposal, Long> {
 
     long countByStatus(ProposalStatus status);
 
+    long countByDepartment(Department department);
+
+    long countByStatusAndDepartment(ProposalStatus status, Department department);
+
     @Query("SELECT COUNT(p) FROM Proposal p WHERE p.status NOT IN ('COMPLETED', 'REJECTED', 'APPROVED')")
     long countActive();
 }

@@ -20,8 +20,9 @@ public interface ProposalMovementRepository extends JpaRepository<ProposalMoveme
     @Query("SELECT pm FROM ProposalMovement pm WHERE pm.proposal = :proposal AND pm.exitedAt IS NULL")
     Optional<ProposalMovement> findCurrentMovement(@Param("proposal") Proposal proposal);
 
-    @Query("SELECT AVG(pm.daysSpent) FROM ProposalMovement pm WHERE pm.toStage.id = :stageId AND pm.daysSpent IS NOT NULL")
-    Double findAverageDaysSpentAtStage(@Param("stageId") Long stageId);
+    @Query("SELECT AVG(pm.daysSpent) FROM ProposalMovement pm WHERE pm.toStage.id = :stageId " +
+           "AND (:department IS NULL OR pm.proposal.department = :department) AND pm.daysSpent IS NOT NULL")
+    Double findAverageDaysSpentAtStageAndDepartment(@Param("stageId") Long stageId, @Param("department") com.nwr.finance.entity.Department department);
 
     @Query("SELECT SUM(pm.daysSpent) FROM ProposalMovement pm WHERE pm.proposal = :proposal AND pm.daysSpent IS NOT NULL")
     Long findTotalDaysSpentForProposal(@Param("proposal") Proposal proposal);
@@ -31,6 +32,7 @@ public interface ProposalMovementRepository extends JpaRepository<ProposalMoveme
     List<ProposalMovement> findStaleMovements(@Param("days") int days);
 
     @Query("SELECT pm.proposal FROM ProposalMovement pm WHERE pm.exitedAt IS NULL AND " +
-           "DATEDIFF(CURRENT_TIMESTAMP, pm.enteredAt) > :days")
-    List<Proposal> findAgingProposals(@Param("days") int days);
+           "DATEDIFF(CURRENT_TIMESTAMP, pm.enteredAt) > :days AND " +
+           "(:department IS NULL OR pm.proposal.department = :department)")
+    List<Proposal> findAgingProposalsWithDepartment(@Param("days") int days, @Param("department") com.nwr.finance.entity.Department department);
 }

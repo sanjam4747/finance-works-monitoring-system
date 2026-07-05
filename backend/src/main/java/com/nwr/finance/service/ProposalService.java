@@ -14,6 +14,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -55,7 +57,7 @@ public class ProposalService {
     // ──────────────────────────────────────────────
     @Transactional(readOnly = true)
     public List<ProposalDTO> getAllProposals(String search, Long departmentId, String status,
-                                             Long stageId, String userRole) {
+                                             Long stageId, String userRole, String username) {
         ProposalStatus statusEnum = null;
         if (status != null && !status.isBlank()) {
             try {
@@ -67,6 +69,19 @@ public class ProposalService {
         String searchParam = (search != null && !search.isBlank()) ? search : null;
         Long deptParam  = (departmentId != null && departmentId > 0) ? departmentId : null;
         Long stageParam = stageId;
+
+        // Force department filter for non-admins
+        if (username != null && !username.isBlank()) {
+            User user = userRepository.findByUsername(username).orElse(null);
+            if (user != null && user.getRole() != UserRole.ADMIN) {
+                if (user.getDepartment() != null) {
+                    deptParam = user.getDepartment().getId();
+                } else {
+                    // Non-admin without a department should not see any proposals from departments
+                    deptParam = -1L;
+                }
+            }
+        }
 
         // Role-based stage filtering
         if ("EXECUTIVE_USER".equals(userRole)) {
@@ -87,9 +102,19 @@ public class ProposalService {
     }
 
     @Transactional(readOnly = true)
-    public ProposalDTO getProposalById(Long id) {
+    public ProposalDTO getProposalById(Long id, String username) {
         Proposal proposal = proposalRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Proposal not found with id: " + id));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposal not found with id: " + id));
+        
+        if (username != null && !username.isBlank()) {
+            User user = userRepository.findByUsername(username).orElse(null);
+            if (user != null && user.getRole() != UserRole.ADMIN) {
+                if (proposal.getDepartment() == null || user.getDepartment() == null || 
+                    !proposal.getDepartment().getId().equals(user.getDepartment().getId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied: You do not have permission to view proposals from this department");
+                }
+            }
+        }
         return toDTO(proposal);
     }
 
@@ -164,10 +189,20 @@ public class ProposalService {
     public ProposalDTO moveProposal(Long proposalId, MoveProposalRequest request,
                                     String userRole, String username) {
         Proposal proposal = proposalRepository.findById(proposalId)
-                .orElseThrow(() -> new RuntimeException("Proposal not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposal not found"));
+
+        if (username != null && !username.isBlank()) {
+            User user = userRepository.findByUsername(username).orElse(null);
+            if (user != null && user.getRole() != UserRole.ADMIN) {
+                if (proposal.getDepartment() == null || user.getDepartment() == null || 
+                    !proposal.getDepartment().getId().equals(user.getDepartment().getId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied: You do not have permission to move proposals from this department");
+                }
+            }
+        }
 
         ProposalStage toStage = stageRepository.findById(request.getToStageId())
-                .orElseThrow(() -> new RuntimeException("Target stage not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Target stage not found"));
 
         // Role-based move restriction
         if ("EXECUTIVE_USER".equals(userRole)) {
@@ -233,7 +268,17 @@ public class ProposalService {
         }
 
         Proposal proposal = proposalRepository.findById(proposalId)
-                .orElseThrow(() -> new RuntimeException("Proposal not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposal not found"));
+
+        if (username != null && !username.isBlank()) {
+            User user = userRepository.findByUsername(username).orElse(null);
+            if (user != null && user.getRole() != UserRole.ADMIN) {
+                if (proposal.getDepartment() == null || user.getDepartment() == null || 
+                    !proposal.getDepartment().getId().equals(user.getDepartment().getId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied: You do not have permission to update proposals from this department");
+                }
+            }
+        }
 
         ProposalStatus status = ProposalStatus.valueOf(newStatus.toUpperCase());
         proposal.setStatus(status);
