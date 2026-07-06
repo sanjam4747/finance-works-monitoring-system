@@ -97,7 +97,8 @@ public class ProposalController {
 
         try {
             String status = body.get("status");
-            return ResponseEntity.ok(proposalService.updateStatus(id, status, userRole, username));
+            String remarks = body.get("remarks");
+            return ResponseEntity.ok(proposalService.updateStatus(id, status, remarks, userRole, username));
         } catch (ResponseStatusException ex) {
             return ResponseEntity.status(ex.getStatusCode())
                     .body(Map.of("message", ex.getReason() != null ? ex.getReason() : ex.getMessage()));
@@ -105,5 +106,24 @@ public class ProposalController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("message", ex.getMessage()));
         }
+    }
+
+    @PostMapping("/{id}/comments")
+    public ResponseEntity<ProposalCommentDTO> addComment(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-Username", required = false) String username,
+            @Valid @RequestBody AddCommentRequest request) {
+        ProposalCommentDTO comment = proposalService.addComment(id, request.getText(), username);
+        return ResponseEntity.status(HttpStatus.CREATED).body(comment);
+    }
+
+    @GetMapping("/{id}/comments")
+    public ResponseEntity<List<ProposalCommentDTO>> getComments(@PathVariable Long id) {
+        return ResponseEntity.ok(proposalService.getComments(id));
+    }
+
+    @GetMapping("/{id}/audit-logs")
+    public ResponseEntity<List<ProposalAuditLogDTO>> getAuditLogs(@PathVariable Long id) {
+        return ResponseEntity.ok(proposalService.getAuditLogs(id));
     }
 }

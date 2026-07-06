@@ -18,7 +18,12 @@ export const proposalAPI = {
   create:         (data)         => api.post('/proposals', data),
   move:           (id, data)     => api.post(`/proposals/${id}/move`, data),
   getMovements:   (id)           => api.get(`/proposals/${id}/movements`),
-  updateStatus:   (id, status)   => api.patch(`/proposals/${id}/status`, { status }),
+  updateStatus:   (id, status, remarks) => api.patch(`/proposals/${id}/status`, { status, remarks }),
+  
+  // Phase 3 endpoints
+  getComments:    (id)           => api.get(`/proposals/${id}/comments`),
+  addComment:     (id, text)     => api.post(`/proposals/${id}/comments`, { text }),
+  getAuditLogs:   (id)           => api.get(`/proposals/${id}/audit-logs`),
 };
 
 export const dashboardAPI = {

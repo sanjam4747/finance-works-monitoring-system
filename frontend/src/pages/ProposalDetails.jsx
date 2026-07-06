@@ -48,9 +48,15 @@ export default function ProposalDetails() {
 
   const [proposal, setProposal]           = useState(null);
   const [movements, setMovements]         = useState([]);
+  const [auditLogs, setAuditLogs]         = useState([]);
+  const [comments, setComments]           = useState([]);
   const [loading, setLoading]             = useState(true);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [statusMsg, setStatusMsg]         = useState('');
+  const [returnRemarks, setReturnRemarks] = useState('');
+  const [showReturnInput, setShowReturnInput] = useState(false);
+  const [newComment, setNewComment]       = useState('');
+  const [commenting, setCommenting]       = useState(false);
 
   const isAdmin    = user?.role === 'ADMIN';
   const isAccounts = user?.role === 'ACCOUNTS_USER';
@@ -61,23 +67,60 @@ export default function ProposalDetails() {
     Promise.all([
       proposalAPI.getById(id),
       proposalAPI.getMovements(id),
-    ]).then(([propRes, movRes]) => {
+      proposalAPI.getAuditLogs(id),
+      proposalAPI.getComments(id)
+    ]).then(([propRes, movRes, auditRes, comRes]) => {
       setProposal(propRes.data);
       setMovements(movRes.data);
+      setAuditLogs(auditRes.data);
+      setComments(comRes.data);
     }).finally(() => setLoading(false));
   }, [id]);
 
   const handleStatusUpdate = async (status) => {
+    if (status === 'RETURNED' && !showReturnInput) {
+      setShowReturnInput(true);
+      return;
+    }
+    if (status === 'RETURNED' && !returnRemarks.trim()) {
+      setStatusMsg('Remarks are required to return a proposal.');
+      return;
+    }
+
     setStatusUpdating(true);
     setStatusMsg('');
     try {
-      const res = await proposalAPI.updateStatus(id, status);
+      const res = await proposalAPI.updateStatus(id, status, returnRemarks);
       setProposal(res.data);
       setStatusMsg(`Status updated to ${status.replace('_', ' ')} successfully.`);
+      setShowReturnInput(false);
+      setReturnRemarks('');
+      
+      // Refresh audit logs
+      const auditRes = await proposalAPI.getAuditLogs(id);
+      setAuditLogs(auditRes.data);
     } catch (err) {
       setStatusMsg(err.response?.data?.message || 'Failed to update status');
     } finally {
       setStatusUpdating(false);
+    }
+  };
+  
+  const handleAddComment = async (e) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+    setCommenting(true);
+    try {
+      const res = await proposalAPI.addComment(id, newComment);
+      setComments([res.data, ...comments]);
+      setNewComment('');
+      
+      const auditRes = await proposalAPI.getAuditLogs(id);
+      setAuditLogs(auditRes.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCommenting(false);
     }
   };
 
@@ -86,6 +129,15 @@ export default function ProposalDetails() {
 
   const totalDays = movements.reduce((acc, m) => acc + (m.daysSpent || 0), 0);
   const isFinished = ['COMPLETED', 'APPROVED', 'REJECTED'].includes(proposal.status);
+  
+  const latestReturnLog = auditLogs.find(a => a.action === 'RETURN');
+  
+  const timelineEvents = [
+    ...movements.map(m => ({ ...m, type: 'movement', sortTime: new Date(m.enteredAt).getTime() })),
+    ...auditLogs
+       .filter(a => !['FORWARD', 'UPDATE'].includes(a.action))
+       .map(a => ({ ...a, type: 'audit', sortTime: new Date(a.timestamp).getTime() }))
+  ].sort((a, b) => a.sortTime - b.sortTime);
 
   return (
     <div className="space-y-5 w-full max-w-5xl fade-in">
@@ -132,6 +184,23 @@ export default function ProposalDetails() {
           </div>
         ))}
       </div>
+      
+      {proposal.status === 'RETURNED' && latestReturnLog && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 sm:p-5 flex gap-4">
+          <div className="mt-1 bg-amber-100 text-amber-600 rounded-full p-1.5 flex-shrink-0 self-start">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div>
+            <h4 className="text-[0.875rem] font-bold text-amber-900 mb-1">Proposal Returned</h4>
+            <p className="text-[0.8125rem] text-amber-800 leading-relaxed">{latestReturnLog.remarks}</p>
+            <p className="text-[0.75rem] text-amber-700 mt-2 font-medium">
+              By {latestReturnLog.actorFullName} ({latestReturnLog.departmentName}) on {formatDateTime(latestReturnLog.timestamp)}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Proposal Information ── */}
       <div className="card p-6">
@@ -253,10 +322,10 @@ export default function ProposalDetails() {
               <button
                 key={action.status}
                 onClick={() => handleStatusUpdate(action.status)}
-                disabled={statusUpdating || proposal.status === action.status}
+                disabled={statusUpdating || proposal.status === action.status || (action.status === 'RETURNED' && showReturnInput && !returnRemarks.trim())}
                 className={`btn text-white ${action.colorClass} disabled:opacity-40`}
               >
-                {statusUpdating ? (
+                {statusUpdating && action.status === 'RETURNED' && returnRemarks ? (
                   <span className="flex items-center gap-1.5">
                     <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     …
@@ -265,69 +334,110 @@ export default function ProposalDetails() {
               </button>
             ))}
           </div>
+          
+          {showReturnInput && (
+            <div className="mt-4 animate-in slide-in-from-top-2 fade-in">
+              <label className="form-label text-red-600">Return Remarks (Required)</label>
+              <textarea
+                value={returnRemarks}
+                onChange={(e) => setReturnRemarks(e.target.value)}
+                placeholder="Please state the reason for returning this proposal..."
+                className="form-input min-h-[80px]"
+              />
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── Movement Timeline ── */}
       <div className="card p-6">
-        <h3 className="text-[0.875rem] font-bold text-slate-800 mb-5">Movement Timeline</h3>
+        <h3 className="text-[0.875rem] font-bold text-slate-800 mb-5">Audit & Movement Timeline</h3>
 
-        {movements.length === 0 ? (
-          <p className="text-slate-400 text-sm">No movement records yet.</p>
+        {timelineEvents.length === 0 ? (
+          <p className="text-slate-400 text-sm">No records yet.</p>
         ) : (
           <div className="space-y-4">
-            {movements.map((movement) => (
-              <div key={movement.id} className="timeline-item">
-                <div className={`timeline-dot ${movement.current ? 'active' : 'done'}`} />
+            {timelineEvents.map((event, index) => {
+              if (event.type === 'audit') {
+                return (
+                  <div key={`audit-${event.id}`} className="timeline-item">
+                    <div className="timeline-dot active bg-indigo-500 border-indigo-200" />
+                    <div className="ml-2 p-4 rounded-xl border bg-indigo-50 border-indigo-100">
+                      <div className="flex items-start justify-between flex-wrap gap-2">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="badge bg-indigo-100 text-indigo-700 border-indigo-200">
+                              {event.action}
+                            </span>
+                          </div>
+                          {event.remarks && (
+                            <p className="text-[0.8125rem] text-indigo-900 mt-1.5">{event.remarks}</p>
+                          )}
+                          <p className="text-[0.6875rem] text-indigo-500 mt-2">
+                            By: <span className="font-semibold text-indigo-700">{event.actorFullName || 'System'}</span> 
+                            {event.departmentName && ` (${event.departmentName})`}
+                          </p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-[0.6875rem] text-indigo-500">{formatDateTime(event.timestamp)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+              <div key={`movement-${event.id}`} className="timeline-item">
+                <div className={`timeline-dot ${event.current ? 'active' : 'done'}`} />
 
                 <div className={`ml-2 p-4 rounded-xl border ${
-                  movement.current
+                  event.current
                     ? 'bg-blue-50 border-blue-200'
                     : 'bg-slate-50 border-slate-100'
                 }`}>
                   <div className="flex items-start justify-between flex-wrap gap-2">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        {movement.fromStage && (
+                        {event.fromStage && (
                           <>
-                            <span className="text-[0.75rem] text-slate-400">{movement.fromStage.stageName}</span>
+                            <span className="text-[0.75rem] text-slate-400">{event.fromStage.stageName}</span>
                             <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                             </svg>
                           </>
                         )}
-                        <span className={`text-[0.875rem] font-bold ${movement.current ? 'text-blue-700' : 'text-slate-700'}`}>
-                          {movement.toStage.stageName}
+                        <span className={`text-[0.875rem] font-bold ${event.current ? 'text-blue-700' : 'text-slate-700'}`}>
+                          {event.toStage.stageName}
                         </span>
-                        {movement.current && (
+                        {event.current && (
                           <span className="badge badge-under-review">Current</span>
                         )}
                       </div>
-                      {movement.remarks && (
-                        <p className="text-[0.75rem] text-slate-500 mt-0.5">{movement.remarks}</p>
+                      {event.remarks && (
+                        <p className="text-[0.75rem] text-slate-500 mt-0.5">{event.remarks}</p>
                       )}
-                      {movement.movedByFullName && (
+                      {event.movedByFullName && (
                         <p className="text-[0.6875rem] text-slate-400 mt-1">
-                          By: <span className="font-medium text-slate-600">{movement.movedByFullName}</span>
+                          By: <span className="font-medium text-slate-600">{event.movedByFullName}</span>
                         </p>
                       )}
                     </div>
 
                     <div className="text-right flex-shrink-0">
-                      {movement.current ? (
+                      {event.current ? (
                         <div>
-                          <p className="text-[0.6875rem] text-slate-400">Since {formatDateTime(movement.enteredAt)}</p>
+                          <p className="text-[0.6875rem] text-slate-400">Since {formatDateTime(event.enteredAt)}</p>
                           <p className="text-[0.875rem] font-bold text-blue-700 mt-0.5 tabular-nums">
-                            {Math.floor((Date.now() - new Date(movement.enteredAt)) / 86400000)}d running
+                            {Math.floor((Date.now() - new Date(event.enteredAt)) / 86400000)}d running
                           </p>
                         </div>
                       ) : (
                         <div>
                           <p className="text-[0.6875rem] text-slate-400">
-                            {formatDateTime(movement.enteredAt)} → {formatDateTime(movement.exitedAt)}
+                            {formatDateTime(event.enteredAt)} → {formatDateTime(event.exitedAt)}
                           </p>
                           <p className="text-[0.875rem] font-bold text-slate-700 mt-0.5 tabular-nums">
-                            {movement.daysSpent} {movement.daysSpent === 1 ? 'day' : 'days'}
+                            {event.daysSpent} {event.daysSpent === 1 ? 'day' : 'days'}
                           </p>
                         </div>
                       )}
@@ -335,7 +445,8 @@ export default function ProposalDetails() {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
 
@@ -350,6 +461,60 @@ export default function ProposalDetails() {
             </div>
           </div>
         )}
+      </div>
+      
+      {/* ── Comments / Discussion ── */}
+      <div className="card p-6">
+        <h3 className="text-[0.875rem] font-bold text-slate-800 mb-5">Discussion & Comments</h3>
+        
+        <form onSubmit={handleAddComment} className="mb-6">
+          <textarea
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            placeholder="Write a comment..."
+            className="form-input min-h-[80px] mb-3"
+            required
+          />
+          <div className="text-right">
+            <button 
+              type="submit" 
+              disabled={commenting || !newComment.trim()} 
+              className="btn btn-primary"
+            >
+              {commenting ? 'Posting...' : 'Post Comment'}
+            </button>
+          </div>
+        </form>
+        
+        <div className="space-y-4">
+          {comments.length === 0 ? (
+            <p className="text-slate-400 text-sm text-center py-4">No comments yet. Start the discussion!</p>
+          ) : (
+            comments.map(c => (
+              <div key={c.id} className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-1">
+                  {c.fullName ? c.fullName.charAt(0).toUpperCase() : '?'}
+                </div>
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex-1">
+                  <div className="flex justify-between items-start mb-1 gap-2 flex-wrap">
+                    <div>
+                      <span className="font-bold text-[0.8125rem] text-slate-800">{c.fullName}</span>
+                      {c.departmentName && (
+                        <span className="ml-2 text-[0.6875rem] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">
+                          {c.departmentName}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[0.6875rem] text-slate-400">{formatDateTime(c.timestamp)}</span>
+                  </div>
+                  <p className="text-[0.8125rem] text-slate-700 whitespace-pre-wrap leading-relaxed">
+                    {c.commentText}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

@@ -29,6 +29,8 @@ public class ProposalService {
     private final ProposalItemRepository      itemRepository;
     private final ProposalSequenceRepository  sequenceRepository;
     private final UserRepository              userRepository;
+    private final ProposalAuditLogRepository  auditLogRepository;
+    private final ProposalCommentRepository   commentRepository;
     private final DepartmentService           departmentService;
     private final ProposalStageService        stageService;
 
@@ -147,6 +149,8 @@ public class ProposalService {
         proposal.setCreatedBy(creator);
 
         Proposal saved = proposalRepository.save(proposal);
+        
+        logAuditAction(saved, creator, ProposalAction.CREATE, "Proposal created");
 
         // Save items (Phase 1)
         if (request.getItems() != null && !request.getItems().isEmpty()) {
@@ -243,6 +247,8 @@ public class ProposalService {
         newMovement.setMovedBy(actor);
         movementRepository.save(newMovement);
 
+        logAuditAction(proposal, actor, ProposalAction.FORWARD, request.getRemarks());
+
         proposal.setCurrentStage(toStage);
         proposal.setStatus(ProposalStatus.UNDER_REVIEW);
         proposalRepository.save(proposal);
@@ -261,7 +267,7 @@ public class ProposalService {
                 .collect(Collectors.toList());
     }
 
-    public ProposalDTO updateStatus(Long proposalId, String newStatus,
+    public ProposalDTO updateStatus(Long proposalId, String newStatus, String remarks,
                                     String userRole, String username) {
         if (userRole != null && "EXECUTIVE_USER".equals(userRole)) {
             throw new RuntimeException("Executive users cannot update proposal status directly");
@@ -281,6 +287,11 @@ public class ProposalService {
         }
 
         ProposalStatus status = ProposalStatus.valueOf(newStatus.toUpperCase());
+        
+        if (status == ProposalStatus.RETURNED && (remarks == null || remarks.trim().isEmpty())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Remarks are mandatory when returning a proposal");
+        }
+
         proposal.setStatus(status);
 
         if (status == ProposalStatus.COMPLETED || status == ProposalStatus.APPROVED || status == ProposalStatus.REJECTED) {
@@ -303,8 +314,84 @@ public class ProposalService {
                 movementRepository.save(m);
             });
         }
+        
+        User actor = null;
+        if (username != null && !username.isBlank()) {
+            actor = userRepository.findByUsername(username).orElse(null);
+        }
+
+        ProposalAction action;
+        if (status == ProposalStatus.RETURNED) action = ProposalAction.RETURN;
+        else if (status == ProposalStatus.APPROVED) action = ProposalAction.APPROVE;
+        else if (status == ProposalStatus.REJECTED) action = ProposalAction.REJECT;
+        else if (status == ProposalStatus.COMPLETED) action = ProposalAction.COMPLETE;
+        else action = ProposalAction.UPDATE;
+
+        logAuditAction(proposal, actor, action, remarks);
 
         return toDTO(proposalRepository.save(proposal));
+    }
+
+    // ──────────────────────────────────────────────
+    //  Comments & Audit Trail (Phase 3)
+    // ──────────────────────────────────────────────
+    public ProposalCommentDTO addComment(Long proposalId, String text, String username) {
+        Proposal proposal = proposalRepository.findById(proposalId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposal not found"));
+                
+        User user = null;
+        if (username != null && !username.isBlank()) {
+            user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+            
+            if (user.getRole() != UserRole.ADMIN) {
+                if (proposal.getDepartment() == null || user.getDepartment() == null || 
+                    !proposal.getDepartment().getId().equals(user.getDepartment().getId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied: You do not have permission to comment on proposals from this department");
+                }
+            }
+        } else {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized to comment");
+        }
+        
+        ProposalComment comment = new ProposalComment();
+        comment.setProposal(proposal);
+        comment.setUser(user);
+        comment.setDepartment(user.getDepartment());
+        comment.setTimestamp(LocalDateTime.now());
+        comment.setCommentText(text);
+        
+        ProposalComment saved = commentRepository.save(comment);
+        logAuditAction(proposal, user, ProposalAction.COMMENT, "Added a comment");
+        
+        return toCommentDTO(saved);
+    }
+    
+    @Transactional(readOnly = true)
+    public List<ProposalCommentDTO> getComments(Long proposalId) {
+        Proposal proposal = proposalRepository.findById(proposalId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposal not found"));
+        return commentRepository.findByProposalOrderByTimestampDesc(proposal)
+                .stream().map(this::toCommentDTO).collect(Collectors.toList());
+    }
+    
+    @Transactional(readOnly = true)
+    public List<ProposalAuditLogDTO> getAuditLogs(Long proposalId) {
+        Proposal proposal = proposalRepository.findById(proposalId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposal not found"));
+        return auditLogRepository.findByProposalOrderByTimestampDesc(proposal)
+                .stream().map(this::toAuditLogDTO).collect(Collectors.toList());
+    }
+    
+    private void logAuditAction(Proposal proposal, User actor, ProposalAction action, String remarks) {
+        ProposalAuditLog log = new ProposalAuditLog();
+        log.setProposal(proposal);
+        log.setActor(actor);
+        log.setDepartment(actor != null ? actor.getDepartment() : null);
+        log.setTimestamp(LocalDateTime.now());
+        log.setAction(action);
+        log.setRemarks(remarks);
+        auditLogRepository.save(log);
     }
 
     // ──────────────────────────────────────────────
@@ -396,6 +483,39 @@ public class ProposalService {
         if (movement.getMovedBy() != null) {
             dto.setMovedByUsername(movement.getMovedBy().getUsername());
             dto.setMovedByFullName(movement.getMovedBy().getFullName());
+        }
+        return dto;
+    }
+    
+    private ProposalCommentDTO toCommentDTO(ProposalComment comment) {
+        ProposalCommentDTO dto = new ProposalCommentDTO();
+        dto.setId(comment.getId());
+        dto.setProposalId(comment.getProposal().getId());
+        dto.setCommentText(comment.getCommentText());
+        dto.setTimestamp(comment.getTimestamp());
+        if (comment.getUser() != null) {
+            dto.setUsername(comment.getUser().getUsername());
+            dto.setFullName(comment.getUser().getFullName());
+        }
+        if (comment.getDepartment() != null) {
+            dto.setDepartmentName(comment.getDepartment().getName());
+        }
+        return dto;
+    }
+    
+    private ProposalAuditLogDTO toAuditLogDTO(ProposalAuditLog log) {
+        ProposalAuditLogDTO dto = new ProposalAuditLogDTO();
+        dto.setId(log.getId());
+        dto.setProposalId(log.getProposal().getId());
+        dto.setAction(log.getAction().name());
+        dto.setRemarks(log.getRemarks());
+        dto.setTimestamp(log.getTimestamp());
+        if (log.getActor() != null) {
+            dto.setActorUsername(log.getActor().getUsername());
+            dto.setActorFullName(log.getActor().getFullName());
+        }
+        if (log.getDepartment() != null) {
+            dto.setDepartmentName(log.getDepartment().getName());
         }
         return dto;
     }
