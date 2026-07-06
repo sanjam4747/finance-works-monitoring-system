@@ -1,4 +1,5 @@
 import { useLocation } from 'react-router-dom';
+import NotificationBell from './NotificationBell';
 
 const pageTitles = {
   '/dashboard':        'Dashboard',
@@ -59,6 +60,7 @@ export default function Navbar({ onMenuToggle }) {
       <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
         <span className="text-[0.75rem] text-slate-400 hidden md:block">{dateStr}</span>
         <div className="h-4 w-px bg-slate-200 hidden md:block" />
+        <NotificationBell />
         <div className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[0.6875rem] font-semibold border border-emerald-100 whitespace-nowrap">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
           <span className="hidden sm:inline">Online</span>

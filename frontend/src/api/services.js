@@ -46,3 +46,9 @@ export const userAPI = {
   activate:    (id)        => api.patch(`/users/${id}/activate`),
   delete:      (id)        => api.delete(`/users/${id}`),
 };
+
+export const notificationAPI = {
+  getAll:        () => api.get('/notifications'),
+  markAsRead:    (id) => api.patch(`/notifications/${id}/read`),
+  markAllAsRead: () => api.patch('/notifications/mark-all-read'),
+};

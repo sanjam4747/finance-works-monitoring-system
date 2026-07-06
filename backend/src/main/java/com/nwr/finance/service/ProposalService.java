@@ -31,6 +31,7 @@ public class ProposalService {
     private final UserRepository              userRepository;
     private final ProposalAuditLogRepository  auditLogRepository;
     private final ProposalCommentRepository   commentRepository;
+    private final NotificationService         notificationService;
     private final DepartmentService           departmentService;
     private final ProposalStageService        stageService;
 
@@ -392,6 +393,9 @@ public class ProposalService {
         log.setAction(action);
         log.setRemarks(remarks);
         auditLogRepository.save(log);
+        
+        // Trigger Notifications
+        notificationService.generateNotifications(proposal, actor, action, remarks);
     }
 
     // ──────────────────────────────────────────────
