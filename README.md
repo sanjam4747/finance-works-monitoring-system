@@ -1,184 +1,198 @@
-# Finance Works Monitoring System
+# 📊 Finance Works Monitoring System (FWMS)
 
-A full-stack web application for the **Finance Department of North Western Railway** to track finance proposals across processing stages, calculate time spent, and identify bottlenecks.
+[![React](https://img.shields.io/badge/React-19-blue.svg)](https://reactjs.org/)
+[![Vite](https://img.shields.io/badge/Vite-6-646CFF.svg)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38B2AC.svg)](https://tailwindcss.com/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![MySQL](https://img.shields.io/badge/MySQL-8-blue.svg)](https://www.mysql.com/)
 
-## 🎯 Core Features
+## 1. 📖 Project Overview
 
-- **Proposal Tracking** — Track every proposal through defined stages
-- **Time Tracking** — Automatically calculate days spent at each stage
-- **Delay Analysis** — Identify which stages cause the most delays
-- **Dashboard** — Visual analytics with charts and KPI cards
-- **Reports** — Aging report, Stage delay report, Department performance report
+**Finance Works Monitoring System (FWMS)** is a comprehensive workflow management web application developed for the Finance Department of the North Western Railway. The primary purpose of this system is to streamline, track, and analyze the lifecycle of finance proposals. It provides full transparency over processing stages, tracks the exact time spent by officers on tasks, identifies bottlenecks, and helps management improve overall departmental efficiency.
 
-## 🏗️ Tech Stack
+## 2. ✨ Features
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React + Vite + Tailwind CSS |
-| Backend | Spring Boot 3.2 (Java 17) |
-| Database | MySQL 8 |
-| ORM | Spring Data JPA (Hibernate) |
-| HTTP Client | Axios |
-| Charts | Recharts |
+- **Multi-product Proposals**: Create and manage proposals containing multiple items/products in a single request.
+- **Department-based Access Control**: Role and department-based authorization to ensure users only see and action proposals relevant to them.
+- **User Management (Admin)**: Full CRUD capabilities for administrators to manage users, roles, and department assignments.
+- **Proposal Movement Workflow**: Seamless state-machine driven transitions between stages (Section Officer, Accounts Officer, Sr. Accounts Officer, FA&CAO).
+- **Officer Assignment**: Proposals are explicitly assigned to specific Executive or Accounts officers to ensure accountability.
+- **Officer Performance Dashboard**: Dedicated views for officers to monitor their pending workload and personal performance metrics.
+- **Audit Trail**: Immutable logging of all actions, movements, and assignments.
+- **Proposal Comments**: Integrated commenting system for officers to discuss and clarify details.
+- **Return Remarks**: Structured capturing of reasons when a proposal is returned/rejected.
+- **Notification System**: Real-time alerts when proposals are assigned, moved, returned, or commented on.
+- **Dashboard and Reports**: High-level visual analytics featuring KPI cards and Recharts-powered graphs.
+- **Stage Delay and Aging Reports**: Detailed analytics to pinpoint where proposals are getting stuck and for how long.
+- **Department Performance Reports**: Comparative analysis of proposal processing speeds across various departments.
 
-## 📋 Prerequisites
+## 3. 🛠️ Tech Stack
 
-- Java 17+
-- Maven 3.8+
-- Node.js 18+
-- MySQL 8.0+
+### Backend
+- **Java 17**
+- **Spring Boot** (REST APIs)
+- **Spring Data JPA** (Hibernate ORM)
+- **Maven** (Build Tool)
+- **MySQL 8** (Relational Database)
 
-## 🚀 Quick Start
+### Frontend
+- **React (Vite)** (UI Framework)
+- **Tailwind CSS** (Styling)
+- **Axios** (HTTP Client)
+- **Recharts** (Data Visualization)
 
-### 1. Database Setup
+### Deployment
+- **Vercel** (Frontend Hosting)
+- **Render** (Backend Hosting)
+- **Railway MySQL** (Database Hosting)
 
-Create the MySQL database (the app will auto-create tables):
+## 4. 🏗️ System Architecture
 
-```sql
-CREATE DATABASE finance_works_db;
-CREATE USER 'finance_user'@'localhost' IDENTIFIED BY 'root';
-GRANT ALL PRIVILEGES ON finance_works_db.* TO 'finance_user'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-Or update `backend/src/main/resources/application.properties` with your credentials.
-
-### 2. Start Backend
-
-```bash
-cd backend
-mvn spring-boot:run
-```
-
-The backend starts at **http://localhost:8080**
-
-Seed data (5 departments, 4 stages, 50 proposals, 200+ movements) is auto-loaded on first run.
-
-### 3. Start Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-The frontend starts at **http://localhost:5173**
-
-## 🔐 Login Credentials
-
-| Role | Username | Password |
-|------|----------|----------|
-| Admin | `admin` | `admin123` |
-| Finance Officer | `finance` | `finance123` |
-
-## 📊 Pages
-
-| Page | URL | Description |
-|------|-----|-------------|
-| Login | `/login` | Authentication |
-| Dashboard | `/dashboard` | KPI cards + charts |
-| Proposals | `/proposals` | List with filters |
-| Create Proposal | `/proposals/create` | New proposal form |
-| Move Proposal | `/proposals/move` | Stage transition |
-| Proposal Details | `/proposals/:id` | Timeline view |
-| Reports | `/reports` | Analytics reports |
-
-## 🔄 Business Logic
-
-When a proposal moves to another stage:
-
-1. The system closes the current movement record (`exitedAt = now`)
-2. Calculates `daysSpent = exitedAt - enteredAt`
-3. Creates a new movement record for the new stage
-4. Updates `proposal.currentStage`
-5. Full audit trail is preserved
-
-### Example Movement
+The application follows a standard three-tier architecture:
 
 ```
-FW-0001 — Track Renewal Works Phase-1
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Section Officer     01 Jun → 05 Jun  →  4 Days
-Accounts Officer    05 Jun → 12 Jun  →  7 Days  
-Sr. Accounts Officer  12 Jun → 18 Jun  →  6 Days
-FA&CAO              18 Jun → Present  →  Running
-
-Total: 17 days elapsed
+[ React Frontend (Vite) ]
+          │
+          ▼  (REST API over HTTP/JSON)
+          │
+[ Spring Boot Backend ]
+          │
+          ▼  (JDBC / Hibernate)
+          │
+[ MySQL Database ]
 ```
 
-## 🌐 API Endpoints
+## 5. 🔄 Workflow
 
-```
-POST   /api/auth/login
-GET    /api/departments
-GET    /api/stages
-GET    /api/proposals?search=&departmentId=&status=&stageId=
-POST   /api/proposals
-GET    /api/proposals/{id}
-POST   /api/proposals/{id}/move
-GET    /api/proposals/{id}/movements
-PATCH  /api/proposals/{id}/status
-GET    /api/dashboard/stats
-GET    /api/reports/aging
-GET    /api/reports/stage-delay
-GET    /api/reports/department-performance
-```
+The proposal lifecycle is strictly managed to ensure proper vetting and accountability:
 
-## 🏢 Departments (Seeded)
+1. **Executive creates proposal**
+   ↓
+2. **Assigned to Executive officer** (automatically assigned upon creation)
+   ↓
+3. **Forward to Accounts officer** (proposal moves to Accounts department)
+   ↓
+4. **Review** (Accounts officer examines the proposal items and details)
+   ↓
+5. **Approve / Return** (Accounts officer approves to next stage OR returns it with remarks)
+   ↓
+6. **If Returned:**
+   **Assigned back to Executive officer** (for clarification/revision)
+   ↓
+7. **Resubmit** (Executive officer addresses remarks and forwards it again)
+   ↓
+8. **Completed** (Final approval by FA&CAO)
 
-- Engineering
-- Electrical
-- Mechanical
-- Personnel
-- Signal & Telecom
-
-## 📋 Processing Stages (Seeded)
-
-1. Section Officer
-2. Accounts Officer
-3. Senior Accounts Officer
-4. FA&CAO
-
-## 🗂️ Project Structure
+## 6. 🗂️ Project Structure
 
 ```
 Finance Works Monitoring System/
 ├── backend/
 │   ├── pom.xml
 │   └── src/main/java/com/nwr/finance/
-│       ├── config/         (CORS, DataInitializer)
-│       ├── controller/     (REST Controllers)
-│       ├── dto/            (Data Transfer Objects)
-│       ├── entity/         (JPA Entities)
+│       ├── config/         (CORS, DataInitializer, Security configs)
+│       ├── controller/     (REST Controllers mapping endpoints)
+│       ├── dto/            (Data Transfer Objects for API requests/responses)
+│       ├── entity/         (JPA Entities mapping to MySQL tables)
 │       ├── exception/      (Global Exception Handler)
-│       ├── repository/     (Spring Data JPA)
-│       └── service/        (Business Logic)
+│       ├── repository/     (Spring Data JPA repositories)
+│       └── service/        (Business logic and transaction management)
 └── frontend/
+    ├── package.json
+    ├── vite.config.js
     └── src/
-        ├── api/            (Axios + Services)
-        ├── components/     (Layout, Sidebar, Navbar, Badges)
-        ├── context/        (AuthContext)
-        └── pages/          (Login, Dashboard, etc.)
+        ├── api/            (Axios configuration and API service classes)
+        ├── components/     (Reusable UI components: layout, sidebar, tables)
+        ├── context/        (React Context for global state like Auth)
+        └── pages/          (Main views: Dashboard, Proposals, Reports, etc.)
 ```
 
-## ⚙️ Configuration
+## 7. 🚀 Installation
 
-Edit `backend/src/main/resources/application.properties`:
+### Prerequisites
+- Java 17+
+- Node.js 18+
+- Maven 3.8+
+- MySQL 8.0+
 
-```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/finance_works_db?createDatabaseIfNotExist=true
-spring.datasource.username=root
-spring.datasource.password=root
-```
+### Backend Setup
+1. Create a MySQL database locally (e.g., `finance_works_db`).
+2. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
+3. Run the Spring Boot application:
+   ```bash
+   mvn spring-boot:run
+   ```
+*Note: The application includes a `DataInitializer` that automatically seeds the database with test users, departments, stages, and dummy proposals on the first run.*
 
-## 📦 Build for Production
+### Frontend Setup
+1. Navigate to the frontend directory:
+   ```bash
+   cd frontend
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the Vite development server:
+   ```bash
+   npm run dev
+   ```
 
-```bash
-# Backend JAR
-cd backend
-mvn clean package -DskipTests
+## 8. 🔐 Environment Variables
 
-# Frontend
-cd frontend
-npm run build
-```
+For production deployments, the following environment variables must be configured:
+
+### Backend (Render)
+- `DB_URL`: JDBC Connection string (e.g., `jdbc:mysql://host:port/db_name`)
+- `DB_USERNAME`: Database user
+- `DB_PASSWORD`: Database password
+- `DDL_AUTO`: Database initialization strategy (e.g., `update`, `none`)
+- `SPRING_PROFILES_ACTIVE`: Use `prod` for production to override local profiles
+
+### Frontend (Vercel)
+- `VITE_API_URL`: The production URL of the Spring Boot backend (e.g., `https://my-backend.onrender.com`)
+
+## 9. 📸 Screenshots
+
+*(Replace the placeholders below with actual application screenshots)*
+
+### Dashboard
+![Dashboard Placeholder](https://via.placeholder.com/800x400?text=Dashboard+Screenshot)
+
+### Proposal List
+![Proposal List Placeholder](https://via.placeholder.com/800x400?text=Proposal+List+Screenshot)
+
+### Proposal Details
+![Proposal Details Placeholder](https://via.placeholder.com/800x400?text=Proposal+Details+Screenshot)
+
+### Reports
+![Reports Placeholder](https://via.placeholder.com/800x400?text=Reports+Screenshot)
+
+### Officer Performance
+![Officer Performance Placeholder](https://via.placeholder.com/800x400?text=Officer+Performance+Screenshot)
+
+### Notifications
+![Notifications Placeholder](https://via.placeholder.com/800x400?text=Notifications+Screenshot)
+
+### User Management
+![User Management Placeholder](https://via.placeholder.com/800x400?text=User+Management+Screenshot)
+
+## 10. 🔮 Future Scope
+
+Possible future improvements and enhancements include:
+- **Email/SMS Notifications**: Integrating third-party services to send critical alerts via Email or SMS.
+- **File Attachments**: Allowing officers to attach PDFs, Excel sheets, and images directly to proposals.
+- **Configurable Workflows**: Building an admin UI to dynamically create and modify department routing stages without code changes.
+- **JWT Authentication**: Implementing robust token-based security for API protection.
+- **Analytics Enhancements**: Adding predictive analytics and more granular filters for custom report generation.
+
+## 11. 👥 Contributors
+
+- **Sanjam** - *Lead Developer* - [GitHub](https://github.com/sanjam4747)
+
+## 12. 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
