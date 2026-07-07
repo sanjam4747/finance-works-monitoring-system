@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -26,6 +27,11 @@ public class ProposalDTO {
     // Phase 1: Who created the proposal
     private String createdByUsername;
     private String createdByFullName;
+
+    // Phase 5: Currently assigned officer
+    private String assignedToUsername;
+    private String assignedToFullName;
+    private LocalDateTime assignedAt;
 
     // Phase 1: Multi-item product list (replaces flat product_* fields)
     private List<ProposalItemDTO> items;

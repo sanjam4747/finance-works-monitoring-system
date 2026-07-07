@@ -18,22 +18,32 @@ export const proposalAPI = {
   create:         (data)         => api.post('/proposals', data),
   move:           (id, data)     => api.post(`/proposals/${id}/move`, data),
   getMovements:   (id)           => api.get(`/proposals/${id}/movements`),
-  updateStatus:   (id, status, remarks) => api.patch(`/proposals/${id}/status`, { status, remarks }),
+  updateStatus:   (id, status, remarks, returnAssigneeId) => api.patch(`/proposals/${id}/status`, {
+    status,
+    remarks,
+    ...(returnAssigneeId != null ? { returnAssigneeId: String(returnAssigneeId) } : {}),
+  }),
   
   // Phase 3 endpoints
   getComments:    (id)           => api.get(`/proposals/${id}/comments`),
   addComment:     (id, text)     => api.post(`/proposals/${id}/comments`, { text }),
   getAuditLogs:   (id)           => api.get(`/proposals/${id}/audit-logs`),
+
+  // Phase 5 endpoints
+  getEligibleAssignees: (id, role) => api.get(`/proposals/${id}/eligible-assignees`, { params: { role } }),
+  reassign:       (id, data)     => api.post(`/proposals/${id}/reassign`, data),
 };
 
 export const dashboardAPI = {
-  getStats: () => api.get('/dashboard/stats'),
+  getStats:   () => api.get('/dashboard/stats'),
+  getMyStats: () => api.get('/dashboard/my-stats'),
 };
 
 export const reportAPI = {
-  getAging:                () => api.get('/reports/aging'),
-  getStageDelay:           () => api.get('/reports/stage-delay'),
-  getDepartmentPerformance:() => api.get('/reports/department-performance'),
+  getAging:                 () => api.get('/reports/aging'),
+  getStageDelay:            () => api.get('/reports/stage-delay'),
+  getDepartmentPerformance: () => api.get('/reports/department-performance'),
+  getOfficerPerformance:    () => api.get('/reports/officer-performance'),
 };
 
 // Phase 1: Full User CRUD

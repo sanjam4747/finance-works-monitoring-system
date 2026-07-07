@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
@@ -50,6 +51,14 @@ public class Proposal {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "created_by")
     private User createdBy;
+
+    // Phase 5: Currently assigned officer
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "assigned_to")
+    private User assignedTo;
+
+    @Column(name = "assigned_at")
+    private LocalDateTime assignedAt;
 
     // Phase 1: Multiple items per proposal — loaded lazily to avoid N+1
     @OneToMany(mappedBy = "proposal", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

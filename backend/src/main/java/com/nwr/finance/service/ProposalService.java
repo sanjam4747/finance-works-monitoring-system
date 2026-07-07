@@ -149,6 +149,12 @@ public class ProposalService {
         proposal.setRemarks(request.getRemarks());
         proposal.setCreatedBy(creator);
 
+        // Phase 5: Auto-assign to creator on proposal creation
+        if (creator != null) {
+            proposal.setAssignedTo(creator);
+            proposal.setAssignedAt(LocalDateTime.now());
+        }
+
         Proposal saved = proposalRepository.save(proposal);
         
         logAuditAction(saved, creator, ProposalAction.CREATE, "Proposal created");
@@ -250,6 +256,33 @@ public class ProposalService {
 
         logAuditAction(proposal, actor, ProposalAction.FORWARD, request.getRemarks());
 
+        // Phase 5: Assign the proposal to the selected receiving officer
+        if (request.getAssignedToUserId() != null) {
+            User newAssignee = userRepository.findById(request.getAssignedToUserId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target officer not found"));
+
+            // Validate: assignee must be in same department
+            if (proposal.getDepartment() != null && newAssignee.getDepartment() != null &&
+                !proposal.getDepartment().getId().equals(newAssignee.getDepartment().getId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Cannot assign to an officer from a different department");
+            }
+            // Validate: assignee must have ACCOUNTS_USER role (forward always goes to Accounts)
+            if (newAssignee.getRole() != UserRole.ACCOUNTS_USER && newAssignee.getRole() != UserRole.ADMIN) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Forward target must be an Accounts user");
+            }
+            if (!Boolean.TRUE.equals(newAssignee.getIsActive())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target officer is not active");
+            }
+
+            String prevAssigneeName = proposal.getAssignedTo() != null ? proposal.getAssignedTo().getFullName() : "Unassigned";
+            proposal.setAssignedTo(newAssignee);
+            proposal.setAssignedAt(now);
+            logAuditAction(proposal, actor, ProposalAction.ASSIGNED,
+                    "Assignment changed from " + prevAssigneeName + " to " + newAssignee.getFullName());
+        }
+
         proposal.setCurrentStage(toStage);
         proposal.setStatus(ProposalStatus.UNDER_REVIEW);
         proposalRepository.save(proposal);
@@ -269,6 +302,12 @@ public class ProposalService {
     }
 
     public ProposalDTO updateStatus(Long proposalId, String newStatus, String remarks,
+                                    String userRole, String username) {
+        return updateStatus(proposalId, newStatus, remarks, null, userRole, username);
+    }
+
+    public ProposalDTO updateStatus(Long proposalId, String newStatus, String remarks,
+                                    Long returnAssigneeId,
                                     String userRole, String username) {
         if (userRole != null && "EXECUTIVE_USER".equals(userRole)) {
             throw new RuntimeException("Executive users cannot update proposal status directly");
@@ -329,6 +368,27 @@ public class ProposalService {
         else action = ProposalAction.UPDATE;
 
         logAuditAction(proposal, actor, action, remarks);
+
+        // Phase 5: For RETURNED, re-assign to the selected Executive officer
+        if (status == ProposalStatus.RETURNED && returnAssigneeId != null) {
+            User returnAssignee = userRepository.findById(returnAssigneeId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Return assignee officer not found"));
+            if (returnAssignee.getRole() != UserRole.EXECUTIVE_USER && returnAssignee.getRole() != UserRole.ADMIN) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Return target must be an Executive user");
+            }
+            if (proposal.getDepartment() != null && returnAssignee.getDepartment() != null &&
+                !proposal.getDepartment().getId().equals(returnAssignee.getDepartment().getId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot assign to an officer from a different department");
+            }
+            if (!Boolean.TRUE.equals(returnAssignee.getIsActive())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Return assignee officer is not active");
+            }
+            String prevAssigneeName = proposal.getAssignedTo() != null ? proposal.getAssignedTo().getFullName() : "Unassigned";
+            proposal.setAssignedTo(returnAssignee);
+            proposal.setAssignedAt(LocalDateTime.now());
+            logAuditAction(proposal, actor, ProposalAction.ASSIGNED,
+                    "Assignment changed from " + prevAssigneeName + " to " + returnAssignee.getFullName());
+        }
 
         return toDTO(proposalRepository.save(proposal));
     }
@@ -394,8 +454,106 @@ public class ProposalService {
         log.setRemarks(remarks);
         auditLogRepository.save(log);
         
-        // Trigger Notifications
-        notificationService.generateNotifications(proposal, actor, action, remarks);
+        // Trigger Notifications (ASSIGNED action skips notification broadcasting)
+        if (action != ProposalAction.ASSIGNED) {
+            notificationService.generateNotifications(proposal, actor, action, remarks);
+        }
+    }
+
+    // ──────────────────────────────────────────────
+    //  Phase 5: Eligible Assignees & Reassignment
+    // ──────────────────────────────────────────────
+    @Transactional(readOnly = true)
+    public List<UserSummaryDTO> getEligibleAssignees(Long proposalId, String targetRole, String username) {
+        Proposal proposal = proposalRepository.findById(proposalId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposal not found"));
+
+        // Enforce department security
+        if (username != null && !username.isBlank()) {
+            User requestingUser = userRepository.findByUsername(username).orElse(null);
+            if (requestingUser != null && requestingUser.getRole() != UserRole.ADMIN) {
+                if (proposal.getDepartment() == null || requestingUser.getDepartment() == null ||
+                    !proposal.getDepartment().getId().equals(requestingUser.getDepartment().getId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied");
+                }
+            }
+        }
+
+        // Resolve the required role from the string identifier (avoids stage name coupling)
+        UserRole requiredRole;
+        if ("ACCOUNTS_USER".equalsIgnoreCase(targetRole)) {
+            requiredRole = UserRole.ACCOUNTS_USER;
+        } else if ("EXECUTIVE_USER".equalsIgnoreCase(targetRole)) {
+            requiredRole = UserRole.EXECUTIVE_USER;
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid target role: " + targetRole);
+        }
+
+        Long deptId = proposal.getDepartment().getId();
+        List<User> eligible = userRepository.findByDepartment_IdAndRoleAndIsActiveTrue(deptId, requiredRole);
+
+        return eligible.stream().map(u -> {
+            UserSummaryDTO dto = new UserSummaryDTO();
+            dto.setId(u.getId());
+            dto.setUsername(u.getUsername());
+            dto.setFullName(u.getFullName());
+            dto.setRole(u.getRole().name());
+            dto.setDepartmentName(u.getDepartment() != null ? u.getDepartment().getName() : null);
+            dto.setActiveProposalCount(proposalRepository.countActiveByAssignedTo(u));
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    public ProposalDTO reassignProposal(Long proposalId, ReassignProposalRequest request, String username) {
+        // Admin-only: validate caller is admin
+        if (username == null || username.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+        User admin = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+        if (admin.getRole() != UserRole.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only administrators can reassign proposals");
+        }
+
+        Proposal proposal = proposalRepository.findById(proposalId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposal not found"));
+
+        User newAssignee = userRepository.findById(request.getAssignedToUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target officer not found"));
+
+        // Validate: same department as proposal
+        if (proposal.getDepartment() != null && newAssignee.getDepartment() != null &&
+            !proposal.getDepartment().getId().equals(newAssignee.getDepartment().getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot reassign to an officer from a different department");
+        }
+
+        // Validate: active user
+        if (!Boolean.TRUE.equals(newAssignee.getIsActive())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target officer is not active");
+        }
+
+        // Validate: role matches the current stage
+        if (proposal.getCurrentStage() != null) {
+            String stageName = proposal.getCurrentStage().getStageName();
+            UserRole expectedRole = "Accounts Department".equals(stageName)
+                    ? UserRole.ACCOUNTS_USER : UserRole.EXECUTIVE_USER;
+            if (newAssignee.getRole() != expectedRole && newAssignee.getRole() != UserRole.ADMIN) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Officer role does not match the current workflow stage");
+            }
+        }
+
+        String prevAssigneeName = proposal.getAssignedTo() != null ? proposal.getAssignedTo().getFullName() : "Unassigned";
+        proposal.setAssignedTo(newAssignee);
+        proposal.setAssignedAt(LocalDateTime.now());
+
+        String auditRemarks = "[Admin Reassignment] from " + prevAssigneeName + " to " + newAssignee.getFullName();
+        if (request.getRemarks() != null && !request.getRemarks().isBlank()) {
+            auditRemarks += ". Reason: " + request.getRemarks();
+        }
+        logAuditAction(proposal, admin, ProposalAction.ASSIGNED, auditRemarks);
+
+        return toDTO(proposalRepository.save(proposal));
     }
 
     // ──────────────────────────────────────────────
@@ -422,6 +580,13 @@ public class ProposalService {
             dto.setCreatedByUsername(proposal.getCreatedBy().getUsername());
             dto.setCreatedByFullName(proposal.getCreatedBy().getFullName());
         }
+
+        // Phase 5: Assignment info
+        if (proposal.getAssignedTo() != null) {
+            dto.setAssignedToUsername(proposal.getAssignedTo().getUsername());
+            dto.setAssignedToFullName(proposal.getAssignedTo().getFullName());
+        }
+        dto.setAssignedAt(proposal.getAssignedAt());
 
         // Items (Phase 1) — loaded fresh from repo to avoid LazyInitializationException
         List<ProposalItem> items = itemRepository.findByProposalOrderBySortOrderAsc(proposal);

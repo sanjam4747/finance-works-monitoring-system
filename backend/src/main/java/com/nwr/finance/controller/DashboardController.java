@@ -45,4 +45,21 @@ public class DashboardController {
         AgingReportDTO report = dashboardService.getAgingReport(username, proposalService);
         return ResponseEntity.ok(report);
     }
+
+    // Phase 5: Admin-only officer performance
+    @GetMapping("/reports/officer-performance")
+    public ResponseEntity<List<OfficerPerformanceDTO>> getOfficerPerformance(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole) {
+        if (!"ADMIN".equals(userRole)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(dashboardService.getOfficerPerformance());
+    }
+
+    // Phase 5: Personal officer dashboard stats
+    @GetMapping("/dashboard/my-stats")
+    public ResponseEntity<OfficerDashboardStatsDTO> getMyStats(
+            @RequestHeader(value = "X-Username", required = false) String username) {
+        return ResponseEntity.ok(dashboardService.getMyStats(username));
+    }
 }

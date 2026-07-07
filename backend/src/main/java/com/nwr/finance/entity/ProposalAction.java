@@ -8,5 +8,6 @@ public enum ProposalAction {
     REJECT,
     COMPLETE,
     UPDATE,
-    COMMENT
+    COMMENT,
+    ASSIGNED   // Phase 5: Officer assignment / reassignment
 }

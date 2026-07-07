@@ -98,7 +98,40 @@ public class ProposalController {
         try {
             String status = body.get("status");
             String remarks = body.get("remarks");
-            return ResponseEntity.ok(proposalService.updateStatus(id, status, remarks, userRole, username));
+            Long returnAssigneeId = null;
+            if (body.get("returnAssigneeId") != null) {
+                try { returnAssigneeId = Long.parseLong(body.get("returnAssigneeId")); } catch (NumberFormatException ignored) {}
+            }
+            return ResponseEntity.ok(proposalService.updateStatus(id, status, remarks, returnAssigneeId, userRole, username));
+        } catch (ResponseStatusException ex) {
+            return ResponseEntity.status(ex.getStatusCode())
+                    .body(Map.of("message", ex.getReason() != null ? ex.getReason() : ex.getMessage()));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", ex.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id}/eligible-assignees")
+    public ResponseEntity<?> getEligibleAssignees(
+            @PathVariable Long id,
+            @RequestParam(required = true) String role,
+            @RequestHeader(value = "X-Username", required = false) String username) {
+        try {
+            return ResponseEntity.ok(proposalService.getEligibleAssignees(id, role, username));
+        } catch (ResponseStatusException ex) {
+            return ResponseEntity.status(ex.getStatusCode())
+                    .body(Map.of("message", ex.getReason() != null ? ex.getReason() : ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/{id}/reassign")
+    public ResponseEntity<?> reassignProposal(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-Username", required = false) String username,
+            @Valid @RequestBody ReassignProposalRequest request) {
+        try {
+            return ResponseEntity.ok(proposalService.reassignProposal(id, request, username));
         } catch (ResponseStatusException ex) {
             return ResponseEntity.status(ex.getStatusCode())
                     .body(Map.of("message", ex.getReason() != null ? ex.getReason() : ex.getMessage()));

@@ -7,9 +7,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -23,6 +25,7 @@ public class DashboardService {
     private final ProposalStageRepository stageRepository;
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
+    private final ProposalAuditLogRepository auditLogRepository;
 
     private Department getDepartmentForUser(String username) {
         if (username == null || username.isBlank()) return null;
@@ -149,5 +152,67 @@ public class DashboardService {
                 over15.stream().map(proposalService::toDTO).collect(java.util.stream.Collectors.toList()),
                 over30.stream().map(proposalService::toDTO).collect(java.util.stream.Collectors.toList())
         );
+    }
+
+    // ───────────────────────────────────────
+    //  Phase 5: Officer Performance & Personal Stats
+    // ───────────────────────────────────────
+    public List<OfficerPerformanceDTO> getOfficerPerformance() {
+        // Only non-admin users can appear as officers
+        List<User> officers = userRepository.findAll().stream()
+                .filter(u -> u.getRole() != UserRole.ADMIN)
+                .filter(u -> Boolean.TRUE.equals(u.getIsActive()))
+                .collect(Collectors.toList());
+
+        return officers.stream().map(u -> {
+            OfficerPerformanceDTO dto = new OfficerPerformanceDTO();
+            dto.setUserId(u.getId());
+            dto.setFullName(u.getFullName());
+            dto.setUsername(u.getUsername());
+            dto.setDepartmentName(u.getDepartment() != null ? u.getDepartment().getName() : null);
+            dto.setCurrentlyAssigned(proposalRepository.countActiveByAssignedTo(u));
+
+            List<ProposalAuditLog> logs = auditLogRepository.findByActorOrderByTimestampDesc(u);
+            dto.setTotalCreated((long) logs.stream().filter(l -> l.getAction() == ProposalAction.CREATE).count());
+            dto.setTotalForwarded((long) logs.stream().filter(l -> l.getAction() == ProposalAction.FORWARD).count());
+            dto.setTotalReturned((long) logs.stream().filter(l -> l.getAction() == ProposalAction.RETURN).count());
+            dto.setTotalApproved((long) logs.stream().filter(l -> l.getAction() == ProposalAction.APPROVE).count());
+            dto.setTotalCompleted((long) logs.stream().filter(l -> l.getAction() == ProposalAction.COMPLETE).count());
+            dto.setTotalComments((long) logs.stream().filter(l -> l.getAction() == ProposalAction.COMMENT).count());
+
+            // Average processing time for completed proposals
+            List<Proposal> completedProposals = proposalRepository.findByAssignedTo(u).stream()
+                    .filter(p -> p.getStatus() == ProposalStatus.COMPLETED || p.getStatus() == ProposalStatus.APPROVED)
+                    .collect(Collectors.toList());
+            double avg = completedProposals.stream()
+                    .mapToLong(p -> {
+                        Long days = movementRepository.findTotalDaysSpentForProposal(p);
+                        return days != null ? days : 0L;
+                    })
+                    .average().orElse(0.0);
+            dto.setAverageProcessingDays(Math.round(avg * 10.0) / 10.0);
+
+            dto.setLastActivityAt(logs.isEmpty() ? null : logs.get(0).getTimestamp());
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    public OfficerDashboardStatsDTO getMyStats(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+
+        OfficerDashboardStatsDTO dto = new OfficerDashboardStatsDTO();
+        dto.setAssignedToMe(proposalRepository.countActiveByAssignedTo(user));
+        dto.setPendingReviews(proposalRepository.countByAssignedToAndStatus(user, ProposalStatus.PENDING));
+        dto.setReturnedToMe(proposalRepository.countByAssignedToAndStatus(user, ProposalStatus.RETURNED));
+
+        // Completed today
+        long completedToday = proposalRepository.findByAssignedTo(user).stream()
+                .filter(p -> (p.getStatus() == ProposalStatus.COMPLETED || p.getStatus() == ProposalStatus.APPROVED)
+                        && p.getCompletionDate() != null
+                        && p.getCompletionDate().isEqual(LocalDate.now()))
+                .count();
+        dto.setCompletedToday(completedToday);
+        return dto;
     }
 }

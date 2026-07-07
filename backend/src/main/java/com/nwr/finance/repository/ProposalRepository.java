@@ -4,6 +4,7 @@ import com.nwr.finance.entity.Department;
 import com.nwr.finance.entity.Proposal;
 import com.nwr.finance.entity.ProposalStage;
 import com.nwr.finance.entity.ProposalStatus;
+import com.nwr.finance.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -46,4 +47,16 @@ public interface ProposalRepository extends JpaRepository<Proposal, Long> {
 
     @Query("SELECT COUNT(p) FROM Proposal p WHERE p.status NOT IN ('COMPLETED', 'REJECTED', 'APPROVED')")
     long countActive();
+
+    // Phase 5: assignment-based queries
+    List<Proposal> findByAssignedTo(User assignedTo);
+
+    List<Proposal> findByAssignedToAndStatus(User assignedTo, ProposalStatus status);
+
+    long countByAssignedTo(User assignedTo);
+
+    long countByAssignedToAndStatus(User assignedTo, ProposalStatus status);
+
+    @Query("SELECT COUNT(p) FROM Proposal p WHERE p.assignedTo = :user AND p.status NOT IN (com.nwr.finance.entity.ProposalStatus.COMPLETED, com.nwr.finance.entity.ProposalStatus.APPROVED, com.nwr.finance.entity.ProposalStatus.REJECTED)")
+    long countActiveByAssignedTo(@Param("user") User user);
 }

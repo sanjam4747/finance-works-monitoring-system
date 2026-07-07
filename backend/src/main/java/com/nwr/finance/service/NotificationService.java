@@ -33,43 +33,56 @@ public class NotificationService {
         
         switch (action) {
             case FORWARD:
-                recipients = userRepository.findByDepartment_IdAndRoleAndIsActiveTrue(deptId, UserRole.ACCOUNTS_USER);
+                // Phase 5: Notify the assigned Accounts officer (targeted), fallback to all Accounts users
+                if (proposal.getAssignedTo() != null && proposal.getAssignedTo().getRole() == UserRole.ACCOUNTS_USER) {
+                    recipients = new java.util.ArrayList<>(List.of(proposal.getAssignedTo()));
+                } else {
+                    recipients = userRepository.findByDepartment_IdAndRoleAndIsActiveTrue(deptId, UserRole.ACCOUNTS_USER);
+                }
                 type = NotificationType.PROPOSAL_FORWARDED;
                 title = "Proposal Forwarded";
                 message = "Proposal " + proposal.getProposalNumber() + " has been forwarded to Accounts.";
                 break;
             case RETURN:
-                recipients = userRepository.findByDepartment_IdAndRoleAndIsActiveTrue(deptId, UserRole.EXECUTIVE_USER);
+                // Phase 5: Notify the assigned Executive officer (targeted), fallback to all Executive users
+                if (proposal.getAssignedTo() != null && proposal.getAssignedTo().getRole() == UserRole.EXECUTIVE_USER) {
+                    recipients = new java.util.ArrayList<>(List.of(proposal.getAssignedTo()));
+                } else {
+                    recipients = userRepository.findByDepartment_IdAndRoleAndIsActiveTrue(deptId, UserRole.EXECUTIVE_USER);
+                }
                 type = NotificationType.PROPOSAL_RETURNED;
                 title = "Proposal Returned";
                 message = "Proposal " + proposal.getProposalNumber() + " was returned by Accounts.";
                 break;
             case APPROVE:
-                recipients = userRepository.findByDepartment_IdAndRoleAndIsActiveTrue(deptId, UserRole.EXECUTIVE_USER);
+                // Phase 5: Notify assigned officer + creator if different
+                recipients = buildTerminalRecipients(proposal, deptId, UserRole.EXECUTIVE_USER);
                 type = NotificationType.PROPOSAL_APPROVED;
                 title = "Proposal Approved";
                 message = "Proposal " + proposal.getProposalNumber() + " has been approved.";
                 break;
             case REJECT:
-                recipients = userRepository.findByDepartment_IdAndRoleAndIsActiveTrue(deptId, UserRole.EXECUTIVE_USER);
+                recipients = buildTerminalRecipients(proposal, deptId, UserRole.EXECUTIVE_USER);
                 type = NotificationType.PROPOSAL_REJECTED;
                 title = "Proposal Rejected";
                 message = "Proposal " + proposal.getProposalNumber() + " has been rejected.";
                 break;
             case COMPLETE:
-                recipients = userRepository.findByDepartment_IdAndRoleAndIsActiveTrue(deptId, UserRole.EXECUTIVE_USER);
+                recipients = buildTerminalRecipients(proposal, deptId, UserRole.EXECUTIVE_USER);
                 type = NotificationType.PROPOSAL_COMPLETED;
                 title = "Proposal Completed";
                 message = "Proposal " + proposal.getProposalNumber() + " processing is complete.";
                 break;
             case COMMENT:
-                recipients = userRepository.findByDepartment_IdAndIsActiveTrue(deptId);
+                // Phase 5: Notify assignedTo + createdBy (deduplicated), excluding actor
+                recipients = buildCommentRecipients(proposal, deptId);
                 type = NotificationType.NEW_COMMENT;
                 title = "New Comment";
                 message = (actor != null ? actor.getFullName() : "Someone") + " commented on proposal " + proposal.getProposalNumber() + ".";
                 break;
             case CREATE:
             case UPDATE:
+            case ASSIGNED:
             default:
                 return; // Do not generate notifications for these actions
         }
@@ -90,6 +103,48 @@ public class NotificationService {
             notification.setRead(false);
             notificationRepository.save(notification);
         }
+    }
+
+    // Phase 5: Notify assigned officer; also notify creator if different
+    private List<User> buildTerminalRecipients(Proposal proposal, Long deptId, UserRole fallbackRole) {
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        List<User> result = new java.util.ArrayList<>();
+        
+        if (proposal.getAssignedTo() != null && Boolean.TRUE.equals(proposal.getAssignedTo().getIsActive())) {
+            result.add(proposal.getAssignedTo());
+            seen.add(proposal.getAssignedTo().getId());
+        }
+        if (proposal.getCreatedBy() != null && Boolean.TRUE.equals(proposal.getCreatedBy().getIsActive())
+                && !seen.contains(proposal.getCreatedBy().getId())) {
+            result.add(proposal.getCreatedBy());
+            seen.add(proposal.getCreatedBy().getId());
+        }
+        // Fallback if nobody resolved
+        if (result.isEmpty()) {
+            result = userRepository.findByDepartment_IdAndRoleAndIsActiveTrue(deptId, fallbackRole);
+        }
+        return result;
+    }
+
+    // Phase 5: For comments, notify assignedTo + createdBy
+    private List<User> buildCommentRecipients(Proposal proposal, Long deptId) {
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        List<User> result = new java.util.ArrayList<>();
+        
+        if (proposal.getAssignedTo() != null && Boolean.TRUE.equals(proposal.getAssignedTo().getIsActive())) {
+            result.add(proposal.getAssignedTo());
+            seen.add(proposal.getAssignedTo().getId());
+        }
+        if (proposal.getCreatedBy() != null && Boolean.TRUE.equals(proposal.getCreatedBy().getIsActive())
+                && !seen.contains(proposal.getCreatedBy().getId())) {
+            result.add(proposal.getCreatedBy());
+            seen.add(proposal.getCreatedBy().getId());
+        }
+        // Fallback
+        if (result.isEmpty()) {
+            result = userRepository.findByDepartment_IdAndIsActiveTrue(deptId);
+        }
+        return result;
     }
 
     @Transactional(readOnly = true)

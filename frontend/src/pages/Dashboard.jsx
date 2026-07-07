@@ -55,6 +55,8 @@ export default function Dashboard() {
   const [stats, setStats]         = useState(null);
   const [stageDelay, setStageDelay] = useState([]);
   const [deptPerf, setDeptPerf]   = useState([]);
+  const [myStats, setMyStats]     = useState(null);
+  const [officerPerf, setOfficerPerf] = useState([]);
   const [loading, setLoading]     = useState(true);
   const { user } = useAuth();
 
@@ -66,10 +68,22 @@ export default function Dashboard() {
     if (isAdmin || isAccounts) {
       calls.push(reportAPI.getStageDelay(), reportAPI.getDepartmentPerformance());
     }
-    Promise.all(calls).then(([statsRes, stageRes, deptRes]) => {
-      setStats(statsRes.data);
-      if (stageRes) setStageDelay(stageRes.data);
-      if (deptRes)  setDeptPerf(deptRes.data);
+    if (!isAdmin) {
+      calls.push(dashboardAPI.getMyStats());
+    } else {
+      calls.push(reportAPI.getOfficerPerformance());
+    }
+    Promise.all(calls.map(p => p.catch(() => ({ data: null })))).then(results => {
+      setStats(results[0].data);
+      let idx = 1;
+      if (isAdmin || isAccounts) {
+        if (results[idx]) setStageDelay(results[idx].data || []);
+        idx++;
+        if (results[idx]) setDeptPerf(results[idx].data || []);
+        idx++;
+      }
+      if (!isAdmin && results[idx]) setMyStats(results[idx].data);
+      if (isAdmin && results[idx]) setOfficerPerf(results[idx].data || []);
     }).finally(() => setLoading(false));
   }, [isAdmin, isAccounts]);
 
@@ -215,6 +229,79 @@ export default function Dashboard() {
               <Bar dataKey="completedProposals" fill="#10b981" radius={[0, 4, 4, 0]} name="Completed" />
             </BarChart>
           </ResponsiveContainer>
+        </ChartCard>
+      )}
+
+      {/* ── Row 5: Personal Officer Stats (non-admin) ── */}
+      {!isAdmin && myStats && (
+        <div>
+          <h3 className="text-[0.875rem] font-bold text-slate-700 mb-3">My Assignment Overview</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatCard
+              title="Assigned To Me" value={myStats.assignedToMe ?? 0} subtitle="Active in my queue"
+              color="#1e3a5f"
+              icon={<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
+            />
+            <StatCard
+              title="Pending Reviews" value={myStats.pendingReviews ?? 0} subtitle="Awaiting my action"
+              color="#f59e0b"
+              icon={<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+            />
+            <StatCard
+              title="Returned To Me" value={myStats.returnedToMe ?? 0} subtitle="Needs my revision"
+              color="#ef4444"
+              icon={<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>}
+            />
+            <StatCard
+              title="Completed Today" value={myStats.completedToday ?? 0} subtitle="Finalized today"
+              color="#10b981"
+              icon={<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Row 6: Admin Officer Performance Table ── */}
+      {isAdmin && officerPerf.length > 0 && (
+        <ChartCard title="Officer Performance">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[0.8125rem] border-collapse">
+              <thead>
+                <tr className="bg-slate-50">
+                  {['Officer', 'Department', 'Active', 'Created', 'Forwarded', 'Returned', 'Approved', 'Completed', 'Avg Days'].map(h => (
+                    <th key={h} className="px-3 py-2 text-left font-semibold text-slate-600 border-b border-slate-200">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {officerPerf.map(o => (
+                  <tr key={o.userId} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[0.625rem] font-bold flex-shrink-0">
+                          {o.fullName.charAt(0)}
+                        </span>
+                        <div>
+                          <p className="font-semibold text-slate-800">{o.fullName}</p>
+                          <p className="text-[0.6875rem] text-slate-400">{o.username}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-600">{o.departmentName}</td>
+                    <td className="px-3 py-2.5">
+                      <span className={`font-bold ${o.currentlyAssigned > 0 ? 'text-blue-700' : 'text-slate-400'}`}>{o.currentlyAssigned}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-700">{o.totalCreated}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{o.totalForwarded}</td>
+                    <td className="px-3 py-2.5 text-amber-600 font-medium">{o.totalReturned}</td>
+                    <td className="px-3 py-2.5 text-emerald-600 font-medium">{o.totalApproved}</td>
+                    <td className="px-3 py-2.5 text-purple-600 font-medium">{o.totalCompleted}</td>
+                    <td className="px-3 py-2.5 text-slate-600">{o.averageProcessingDays}d</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </ChartCard>
       )}
     </div>

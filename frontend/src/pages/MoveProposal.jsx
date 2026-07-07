@@ -23,10 +23,13 @@ export default function MoveProposal() {
   const [success, setSuccess]               = useState('');
 
   const [form, setForm] = useState({
-    proposalId: paramId || '',
-    toStageId:  '',
-    remarks:    '',
+    proposalId:     paramId || '',
+    toStageId:      '',
+    remarks:        '',
+    assignedToUserId: '',
   });
+  const [assignees, setAssignees]           = useState([]);
+  const [loadingAssignees, setLoadingAssignees] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -47,12 +50,33 @@ export default function MoveProposal() {
       ]).then(([pRes, mRes]) => {
         setSelectedProposal(pRes.data);
         setMovements(mRes.data);
+        // Reset stage and assignee selection when proposal changes
+        setForm(prev => ({ ...prev, toStageId: '', assignedToUserId: '' }));
+        setAssignees([]);
       }).finally(() => setLoadingProposal(false));
     } else {
       setSelectedProposal(null);
       setMovements([]);
+      setAssignees([]);
     }
   }, [form.proposalId]);
+
+  // Phase 5: Fetch eligible assignees when stage changes
+  useEffect(() => {
+    if (!form.proposalId || !form.toStageId || !selectedProposal) {
+      setAssignees([]);
+      return;
+    }
+    setLoadingAssignees(true);
+    setForm(prev => ({ ...prev, assignedToUserId: '' }));
+    // Determine target role from stage name
+    const targetStage = stages.find(s => String(s.id) === String(form.toStageId));
+    const targetRole  = targetStage?.stageName === 'Accounts Department' ? 'ACCOUNTS_USER' : 'EXECUTIVE_USER';
+    proposalAPI.getEligibleAssignees(form.proposalId, targetRole)
+      .then(res => setAssignees(res.data))
+      .catch(() => setAssignees([]))
+      .finally(() => setLoadingAssignees(false));
+  }, [form.toStageId, form.proposalId]);
 
   const handleChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -65,13 +89,18 @@ export default function MoveProposal() {
       setError('Please select a proposal and target stage');
       return;
     }
+    if (!form.assignedToUserId) {
+      setError('Please select an officer to assign the proposal to');
+      return;
+    }
     setLoading(true);
     setError('');
     setSuccess('');
     try {
       const res = await proposalAPI.move(form.proposalId, {
-        toStageId: Number(form.toStageId),
-        remarks:   form.remarks,
+        toStageId:        Number(form.toStageId),
+        remarks:          form.remarks,
+        assignedToUserId: Number(form.assignedToUserId),
       });
       setSuccess(`Proposal moved to ${res.data.currentStage?.stageName} successfully!`);
       setTimeout(() => navigate(`/proposals/${form.proposalId}`), 1500);
@@ -142,6 +171,11 @@ export default function MoveProposal() {
                 <p className="font-bold text-blue-800 text-[0.875rem]">
                   {selectedProposal.currentStage?.stageName || 'N/A'}
                 </p>
+                {selectedProposal.assignedToFullName && (
+                  <p className="text-[0.75rem] text-blue-600 mt-1">
+                    Assigned to: <span className="font-semibold">{selectedProposal.assignedToFullName}</span>
+                  </p>
+                )}
                 <div className="mt-2">
                   <StatusBadge status={selectedProposal.status} />
                 </div>
@@ -169,6 +203,33 @@ export default function MoveProposal() {
                 </p>
               )}
             </div>
+
+            {/* Phase 5: Officer Assignee Selection */}
+            {form.toStageId && selectedProposal && (
+              <div>
+                <label className="form-label">Assign To Officer <span className="text-red-500">*</span></label>
+                {loadingAssignees ? (
+                  <p className="text-[0.75rem] text-slate-400">Loading officers…</p>
+                ) : assignees.length === 0 ? (
+                  <p className="text-[0.75rem] text-amber-600">No eligible officers found for this department and role.</p>
+                ) : (
+                  <select
+                    name="assignedToUserId"
+                    value={form.assignedToUserId}
+                    onChange={handleChange}
+                    required
+                    className="form-select"
+                  >
+                    <option value="">Select officer…</option>
+                    {assignees.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.fullName} — {a.activeProposalCount} active proposal{a.activeProposalCount !== 1 ? 's' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="form-label">Remarks</label>
@@ -199,7 +260,7 @@ export default function MoveProposal() {
             <div className="flex gap-3 pt-1">
               <button
                 type="submit"
-                disabled={loading || !selectedProposal || availableStages.length === 0}
+                disabled={loading || !selectedProposal || availableStages.length === 0 || (form.toStageId && !form.assignedToUserId)}
                 className="btn btn-primary flex-1"
               >
                 {loading ? (

@@ -4,6 +4,8 @@ import com.nwr.finance.entity.*;
 import com.nwr.finance.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +30,9 @@ public class DataInitializer implements CommandLineRunner {
     private final ProposalSequenceRepository sequenceRepository;
     private final UserRepository             userRepository;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     @Override
     public void run(String... args) {
         boolean hasOldStages = stageRepository.existsByStageName("Section Officer") ||
@@ -42,7 +47,10 @@ public class DataInitializer implements CommandLineRunner {
                                 sequenceRepository.count() > 0;   // Phase 1: check sequence exists
 
         if (alreadySeeded) {
-            log.info("Data already seeded (Phase 1). Skipping.");
+            log.info("Data already seeded (Phase 1). Skipping full seed.");
+            fixAuditLogEnum();
+            // Phase 5: Backfill assignedTo for existing proposals (safe to run repeatedly — no-op if already set)
+            backfillAssignments();
             return;
         }
 
@@ -57,7 +65,20 @@ public class DataInitializer implements CommandLineRunner {
         }
 
         log.info("Seeding fresh data (Phase 1)...");
+        fixAuditLogEnum();
         seedData();
+        // Phase 5: Backfill assignments for seeded data
+        backfillAssignments();
+    }
+
+    @Transactional
+    public void fixAuditLogEnum() {
+        try {
+            entityManager.createNativeQuery("ALTER TABLE proposal_audit_logs MODIFY COLUMN action VARCHAR(50) NOT NULL").executeUpdate();
+            log.info("Successfully altered proposal_audit_logs.action to VARCHAR(50)");
+        } catch (Exception e) {
+            log.warn("Could not alter proposal_audit_logs table, it might already be correct or not exist yet: {}", e.getMessage());
+        }
     }
 
     @Transactional
@@ -298,5 +319,22 @@ public class DataInitializer implements CommandLineRunner {
             s.setSequenceNumber(seq);
             return stageRepository.save(s);
         });
+    }
+
+    @Transactional
+    public void backfillAssignments() {
+        java.time.LocalDateTime fallback = java.time.LocalDateTime.now();
+        long count = 0;
+        for (com.nwr.finance.entity.Proposal p : proposalRepository.findAll()) {
+            if (p.getAssignedTo() == null && p.getCreatedBy() != null) {
+                p.setAssignedTo(p.getCreatedBy());
+                p.setAssignedAt(p.getSubmissionDate() != null ? p.getSubmissionDate().atStartOfDay() : fallback);
+                proposalRepository.save(p);
+                count++;
+            }
+        }
+        if (count > 0) {
+            log.info("Phase 5 migration: backfilled assignedTo for {} proposals.", count);
+        }
     }
 }

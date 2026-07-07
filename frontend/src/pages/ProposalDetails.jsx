@@ -55,8 +55,19 @@ export default function ProposalDetails() {
   const [statusMsg, setStatusMsg]         = useState('');
   const [returnRemarks, setReturnRemarks] = useState('');
   const [showReturnInput, setShowReturnInput] = useState(false);
+  const [returnAssignees, setReturnAssignees] = useState([]);
+  const [returnAssigneeId, setReturnAssigneeId] = useState('');
+  const [loadingReturnAssignees, setLoadingReturnAssignees] = useState(false);
   const [newComment, setNewComment]       = useState('');
   const [commenting, setCommenting]       = useState(false);
+
+  // Phase 5: Admin reassign
+  const [showReassign, setShowReassign]   = useState(false);
+  const [reassignees, setReassignees]     = useState([]);
+  const [reassignUserId, setReassignUserId] = useState('');
+  const [reassignRemarks, setReassignRemarks] = useState('');
+  const [reassigning, setReassigning]     = useState(false);
+  const [reassignMsg, setReassignMsg]     = useState('');
 
   const isAdmin    = user?.role === 'ADMIN';
   const isAccounts = user?.role === 'ACCOUNTS_USER';
@@ -80,21 +91,33 @@ export default function ProposalDetails() {
   const handleStatusUpdate = async (status) => {
     if (status === 'RETURNED' && !showReturnInput) {
       setShowReturnInput(true);
+      // Phase 5: Load Executive assignees for the return target
+      setLoadingReturnAssignees(true);
+      try {
+        const res = await proposalAPI.getEligibleAssignees(id, 'EXECUTIVE_USER');
+        setReturnAssignees(res.data);
+      } catch { setReturnAssignees([]); }
+      finally { setLoadingReturnAssignees(false); }
       return;
     }
     if (status === 'RETURNED' && !returnRemarks.trim()) {
       setStatusMsg('Remarks are required to return a proposal.');
       return;
     }
+    if (status === 'RETURNED' && !returnAssigneeId) {
+      setStatusMsg('Please select the Executive officer to return this proposal to.');
+      return;
+    }
 
     setStatusUpdating(true);
     setStatusMsg('');
     try {
-      const res = await proposalAPI.updateStatus(id, status, returnRemarks);
+      const res = await proposalAPI.updateStatus(id, status, returnRemarks, status === 'RETURNED' ? Number(returnAssigneeId) : null);
       setProposal(res.data);
       setStatusMsg(`Status updated to ${status.replace('_', ' ')} successfully.`);
       setShowReturnInput(false);
       setReturnRemarks('');
+      setReturnAssigneeId('');
       
       // Refresh audit logs
       const auditRes = await proposalAPI.getAuditLogs(id);
@@ -211,6 +234,16 @@ export default function ProposalDetails() {
           </InfoField>
           {proposal.createdByFullName && (
             <InfoField label="Submitted By">{proposal.createdByFullName}</InfoField>
+          )}
+          {proposal.assignedToFullName && (
+            <InfoField label="Currently Assigned To">
+              <span className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[0.625rem] font-bold flex-shrink-0">
+                  {proposal.assignedToFullName.charAt(0)}
+                </span>
+                {proposal.assignedToFullName}
+              </span>
+            </InfoField>
           )}
           {proposal.completionDate && (
             <InfoField label="Completion Date">
@@ -336,14 +369,129 @@ export default function ProposalDetails() {
           </div>
           
           {showReturnInput && (
-            <div className="mt-4 animate-in slide-in-from-top-2 fade-in">
-              <label className="form-label text-red-600">Return Remarks (Required)</label>
-              <textarea
-                value={returnRemarks}
-                onChange={(e) => setReturnRemarks(e.target.value)}
-                placeholder="Please state the reason for returning this proposal..."
-                className="form-input min-h-[80px]"
-              />
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="form-label text-red-600">Return Remarks (Required)</label>
+                <textarea
+                  value={returnRemarks}
+                  onChange={(e) => setReturnRemarks(e.target.value)}
+                  placeholder="Please state the reason for returning this proposal..."
+                  className="form-input min-h-[80px]"
+                />
+              </div>
+              
+              {/* Phase 5: Executive officer selection for Return */}
+              <div>
+                <label className="form-label text-red-600">Assign Return To Officer (Required)</label>
+                {loadingReturnAssignees ? (
+                  <p className="text-[0.75rem] text-slate-400">Loading officers…</p>
+                ) : (
+                  <select
+                    value={returnAssigneeId}
+                    onChange={(e) => setReturnAssigneeId(e.target.value)}
+                    className="form-select"
+                    required
+                  >
+                    <option value="">Select Executive officer…</option>
+                    {returnAssignees.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.fullName} — {a.activeProposalCount} active proposal{a.activeProposalCount !== 1 ? 's' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Phase 5: Admin Reassign Panel */}
+      {isAdmin && proposal && !isFinished && (
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-[0.875rem] font-bold text-slate-800">Admin Reassignment</h3>
+              <p className="text-[0.75rem] text-slate-500 mt-0.5">Reassign this proposal to another eligible officer without a stage transition.</p>
+            </div>
+            <button
+              onClick={() => {
+                if (!showReassign) {
+                  // Load eligible officers for current stage when opening
+                  const currentStageName = proposal.currentStage?.stageName;
+                  const targetRole = currentStageName === 'Accounts Department' ? 'ACCOUNTS_USER' : 'EXECUTIVE_USER';
+                  proposalAPI.getEligibleAssignees(id, targetRole).then(res => setReassignees(res.data)).catch(() => setReassignees([]));
+                }
+                setShowReassign(!showReassign);
+                setReassignMsg('');
+              }}
+              className="btn btn-secondary text-[0.75rem]"
+            >
+              {showReassign ? 'Cancel' : 'Reassign'}
+            </button>
+          </div>
+
+          {proposal.assignedToFullName && (
+            <p className="text-[0.8125rem] text-slate-600 mb-3">
+              Currently assigned to: <span className="font-bold">{proposal.assignedToFullName}</span>
+            </p>
+          )}
+
+          {showReassign && (
+            <div className="space-y-3">
+              <div>
+                <label className="form-label">New Assignee</label>
+                <select
+                  value={reassignUserId}
+                  onChange={(e) => setReassignUserId(e.target.value)}
+                  className="form-select"
+                >
+                  <option value="">Select officer…</option>
+                  {reassignees.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.fullName} — {a.activeProposalCount} active proposal{a.activeProposalCount !== 1 ? 's' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="form-label">Reason for Reassignment</label>
+                <textarea
+                  value={reassignRemarks}
+                  onChange={(e) => setReassignRemarks(e.target.value)}
+                  placeholder="Optional: explain why this proposal is being reassigned..."
+                  className="form-input min-h-[60px]"
+                />
+              </div>
+              {reassignMsg && (
+                <div className={`px-4 py-2.5 rounded-lg text-[0.8125rem] ${
+                  reassignMsg.includes('success') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'
+                }`}>{reassignMsg}</div>
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={async () => {
+                    if (!reassignUserId) { setReassignMsg('Please select an officer.'); return; }
+                    setReassigning(true);
+                    try {
+                      const res = await proposalAPI.reassign(id, { assignedToUserId: Number(reassignUserId), remarks: reassignRemarks });
+                      setProposal(res.data);
+                      setReassignMsg('Proposal reassigned successfully.');
+                      const auditRes = await proposalAPI.getAuditLogs(id);
+                      setAuditLogs(auditRes.data);
+                      setShowReassign(false);
+                      setReassignUserId('');
+                      setReassignRemarks('');
+                    } catch (err) {
+                      setReassignMsg(err.response?.data?.message || 'Failed to reassign');
+                    } finally { setReassigning(false); }
+                  }}
+                  disabled={reassigning || !reassignUserId}
+                  className="btn btn-primary"
+                >
+                  {reassigning ? 'Reassigning…' : 'Confirm Reassignment'}
+                </button>
+              </div>
             </div>
           )}
         </div>

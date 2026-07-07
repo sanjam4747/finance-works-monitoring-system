@@ -34,7 +34,7 @@ public class ProposalAuditLog {
     private LocalDateTime timestamp;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "action", nullable = false)
+    @Column(name = "action", nullable = false, columnDefinition = "VARCHAR(50)")
     private ProposalAction action;
 
     @Column(name = "remarks", length = 2000)

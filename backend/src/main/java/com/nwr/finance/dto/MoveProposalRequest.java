@@ -14,4 +14,8 @@ public class MoveProposalRequest {
     private Long toStageId;
 
     private String remarks;
+
+    // Phase 5: The officer to assign the proposal to after the move
+    @NotNull(message = "Assigned officer is required")
+    private Long assignedToUserId;
 }
