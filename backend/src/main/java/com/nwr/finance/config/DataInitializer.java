@@ -51,6 +51,7 @@ public class DataInitializer implements CommandLineRunner {
             fixAuditLogEnum();
             // Phase 5: Backfill assignedTo for existing proposals (safe to run repeatedly — no-op if already set)
             backfillAssignments();
+            
             return;
         }
 

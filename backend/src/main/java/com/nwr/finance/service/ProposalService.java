@@ -334,8 +334,10 @@ public class ProposalService {
 
         proposal.setStatus(status);
 
-        if (status == ProposalStatus.COMPLETED || status == ProposalStatus.APPROVED || status == ProposalStatus.REJECTED) {
-            proposal.setCompletionDate(LocalDate.now());
+        if (status == ProposalStatus.COMPLETED || status == ProposalStatus.APPROVED || status == ProposalStatus.REJECTED || status == ProposalStatus.RETURNED) {
+            if (status != ProposalStatus.RETURNED) {
+                proposal.setCompletionDate(LocalDate.now());
+            }
 
             User actor = null;
             if (username != null && !username.isBlank()) {
@@ -359,6 +361,24 @@ public class ProposalService {
         if (username != null && !username.isBlank()) {
             actor = userRepository.findByUsername(username).orElse(null);
         }
+
+        if (status == ProposalStatus.RETURNED) {
+            ProposalStage execStage = stageRepository.findByStageName("Executive Department")
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Executive Department stage not found"));
+            
+            ProposalMovement newMovement = new ProposalMovement();
+            newMovement.setProposal(proposal);
+            newMovement.setFromStage(proposal.getCurrentStage());
+            newMovement.setToStage(execStage);
+            newMovement.setEnteredAt(LocalDateTime.now());
+            newMovement.setRemarks(remarks);
+            newMovement.setMovedBy(actor);
+            movementRepository.save(newMovement);
+            
+            proposal.setCurrentStage(execStage);
+        }
+        
+
 
         ProposalAction action;
         if (status == ProposalStatus.RETURNED) action = ProposalAction.RETURN;
