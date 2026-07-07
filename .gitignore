@@ -29,3 +29,5 @@ logs/
 
 # Other
 .gemini/
+
+application-local.properties
