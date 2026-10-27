@@ -155,32 +155,7 @@ For production deployments, the following environment variables must be configur
 ### Frontend (Vercel)
 - `VITE_API_URL`: The production URL of the Spring Boot backend (e.g., `https://my-backend.onrender.com`)
 
-## 9. 📸 Screenshots
-
-*(Replace the placeholders below with actual application screenshots)*
-
-### Dashboard
-![Dashboard Placeholder](https://via.placeholder.com/800x400?text=Dashboard+Screenshot)
-
-### Proposal List
-![Proposal List Placeholder](https://via.placeholder.com/800x400?text=Proposal+List+Screenshot)
-
-### Proposal Details
-![Proposal Details Placeholder](https://via.placeholder.com/800x400?text=Proposal+Details+Screenshot)
-
-### Reports
-![Reports Placeholder](https://via.placeholder.com/800x400?text=Reports+Screenshot)
-
-### Officer Performance
-![Officer Performance Placeholder](https://via.placeholder.com/800x400?text=Officer+Performance+Screenshot)
-
-### Notifications
-![Notifications Placeholder](https://via.placeholder.com/800x400?text=Notifications+Screenshot)
-
-### User Management
-![User Management Placeholder](https://via.placeholder.com/800x400?text=User+Management+Screenshot)
-
-## 10. 🔮 Future Scope
+## 9. 🔮 Future Scope
 
 Possible future improvements and enhancements include:
 - **Email/SMS Notifications**: Integrating third-party services to send critical alerts via Email or SMS.
@@ -188,11 +163,3 @@ Possible future improvements and enhancements include:
 - **Configurable Workflows**: Building an admin UI to dynamically create and modify department routing stages without code changes.
 - **JWT Authentication**: Implementing robust token-based security for API protection.
 - **Analytics Enhancements**: Adding predictive analytics and more granular filters for custom report generation.
-
-## 11. 👥 Contributors
-
-- **Sanjam** - *Lead Developer* - [GitHub](https://github.com/sanjam4747)
-
-## 12. 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
